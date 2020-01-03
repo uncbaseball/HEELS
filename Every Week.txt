@@ -1,0 +1,40 @@
+What has to go on every week:
+
+Scouting - midweek and weekend
+	- Bunts/1P Swing/GB%
+	- PbP Sprays
+	- Synergy Sprays
+	- Movement
+	- Usage
+
+Post-Game
+	0. read.csv and slide.trackman.columns
+	1. Fix Warmups fix.warmup.pitchofpa
+	2. Tag Pitches tag.pitches
+	3. Add Predicted Columns add.predicted.columns
+	4. Export Synergy csv
+		1. Validate Results TIME
+		2. Upload
+	5. Update App
+		1. render.dashboard coach= T
+		2. render_pitcher_app coach= T
+	6. Tag High Speed Video
+		1. Check if number of videos line up compare.video.counts
+		2. If not: TIME
+      - tag start of inning thumbnails
+      - compare.video.counts
+      - remove extra videos/add dummy
+		3. Tag Videos rename.video
+		4. Upload
+	7. Tag Synergy Video
+		1. Download
+		2. ID givesynergyexportids
+		3. If error:
+		4. Identify missing videos or reorder out of place ones
+		5. Tag rename.synergy.videos
+		6. Upload
+
+
+Analysis
+	- Thoughts
+	- Validation

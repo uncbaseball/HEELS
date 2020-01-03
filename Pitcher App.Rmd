@@ -1,0 +1,719 @@
+---
+output: 
+  html_document
+params:
+  pitcher:
+    value: x
+  data:
+    value: x
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F)
+require(crosstalk)
+require(htmlwidgets)
+require(plotly)
+require(htmltools)
+
+
+source("global.R")
+
+video.on.click <- "
+function(el, x) {
+  el.on('plotly_click', function(data){
+    var pts = 'https://s3.amazonaws.com/publicuncsynergyvideo/' + data.points[0].customdata.substring(0, 11) + '/' + data.points[0].customdata + '.mp4';
+    window.open(pts, '_blank');
+  });
+}
+"
+
+hover.on.lasso <- "
+function(el, x) {
+  el.on('plotly_selecting', function(data){
+    hoverInfo = document.getElementById('hoverinfo');
+    hoverInfo.innerHTML = '';
+    var pts = data.points[0].hovertext;
+    hoverInfo.innerHTML = pts;
+
+    tvfeed = document.getElementById('tvfeed');
+    var videolink = 'https://s3.amazonaws.com/publicuncsynergyvideo/' + data.points[0].customdata.substring(0, 12) + '/' + data.points[0].customdata + '.mp4';
+
+    tvfeed.href = videolink;
+
+    highspeedside = document.getElementById('highspeedside');
+    var highspeedlink = 'https://s3.amazonaws.com/unchitterhighspeedvideo/' + data.points[0].customdata.substring(0, 12) + '_' + cameraside + '/' + data.points[0].customdata + '.mp4';
+    highspeedside.href = highspeedlink;
+
+    highspeedfront = document.getElementById('highspeedfront');
+    var highspeedlink2 = 'https://s3.amazonaws.com/unchitterhighspeedvideo/' + data.points[0].customdata.substring(0, 12) + '_' + camerafront + '/' + data.points[0].customdata + '.mp4';
+    highspeedfront.href = highspeedlink2;
+
+
+  });
+}"
+
+
+margin0 <- list(pad = 0, l = 0, r = 0, b = 0, t = 9)
+p.view = T
+```
+
+
+```{r include=FALSE}
+# params <- list(pitcher = "Butler, Hansen", singlegame = T)
+# params$data <- read.csv(file = "data/uncall.csv", stringsAsFactors = F) %>% filter(Pitcher == params$pitcher)
+pitcher <- params$pitcher
+```
+
+---
+title: `r params$pitcher`
+---
+
+<meta name="viewport" content="width=device-width, initial-scale=1"></meta>
+<meta name="viewport" content="height=device-height, initial-scale=1"></meta>
+
+<script src="www/change pitcher visual buttons.js"> </script>
+
+
+<style>
+html, body {
+  background-image: url('www/Bosh CF View.jpeg');
+  box-shadow: inset 0 0 0 1000px rgba(255,255,255,.4);
+  margin: 0; 
+  /*height: 100%; */
+  /*overflow: hidden*/
+}
+
+p {
+  font-weight: bold;
+  font-size: 1em;
+  background-color: white;
+}
+
+h1.title {
+  text-align: center;
+  font-size: 24px;
+  height: 5%;
+}
+
+.legend{
+  left: 50%;
+  width: 40%;
+  display: inline;
+  bottom: 14%;
+  position: fixed;
+  z-index: 3;
+  padding-top: 10%;
+}
+
+#videobuttons{
+  padding-top: 0px !important;
+  z-index: 4;
+  position: fixed;
+  bottom: 10%;
+  left: 40%;
+}
+
+.visual {
+  width: 95%;
+  height: 65%;
+  top: 15vh;
+}
+
+.filters {
+  width: 90%;
+  right: 0px;
+  height: 10vh;
+}
+
+#showfilters {
+  width: 100%;
+}
+
+#hitter {
+  width: 46%;
+  display: inline-block;
+}
+
+#inning{
+  width: 26%;
+  display: inline-block;
+}
+
+
+#showhotcold {
+  width: 25%;
+  height: 15%;
+  right: 0px;
+  border: solid;
+  border-width: 4px 4px 0px 0;
+  border-color: black;
+}
+
+#changevisual {
+  background-color: lightblue;
+  border: 4px solid black;
+}
+
+#showvisual {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+}
+
+footer {
+  bottom: 15px;
+  display: inline-block;
+  position: fixed; 
+  z-index: 3;
+  left: 30%;
+}
+
+#date {
+  width: 90%;
+}
+
+#game {
+  width: 40%;
+  display: inline-block;
+  color: blue;
+}
+
+#month{
+  width: 20%;
+  display: inline-block;
+  color: blue;
+}
+
+#year{
+  width: 11%;
+  display: inline-block;
+  color: blue;
+}
+
+#scrim{
+  width: 20%;
+  display: inline-block;
+  color: blue;
+}
+
+#scrim, #bhand, #pitchresult, #contactresult, #contactquality{
+  width: 23%;
+  display: inline-block;
+}
+
+#pitches, #counts{
+  width: 18%;
+  display: inline-block;
+}
+
+.noshow2start{
+  display: none;
+}
+
+
+#hoverinfo{
+  background-color: white;
+  width: 70%;
+  position: relative;
+  display: block;
+  z-index: 3 !important;
+}
+
+.overlay {
+  height: 100%;
+  width: 0;
+  position: fixed;
+  z-index: 8;
+  top: 0;
+  left: 0;
+  background-color: rgb(0, 0, 0);
+  background-color: rgba(0, 0, 0, 0.9);
+  overflow-x: hidden;
+  transition: 0.5s;
+}
+
+.overlay-content {
+  position: relative;
+  top: 25%;
+  width: 100%;
+  text-align: center;
+  margin-top: 30px;
+}
+
+.overlay a {
+  padding: 10px;
+  font-size: 24px;
+  color: purple;
+  display: block;
+  transition: 1s;
+}
+
+.overlay .closebtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 60px;
+}
+
+span {
+  font-weight: bold;
+}
+
+@media only screen and (min-width: 800px) {
+  footer {
+    display: none;
+  }
+  #hoverinfo {
+    display: none;
+  }
+  .legend {
+    position: static;
+    height: 25%;
+    width: 30%;
+  }
+  .legend img {
+    width: 30% !important;
+  }
+  .legend button {
+    width: 20%;
+  }
+  
+  #videobuttons{
+    bottom: 0px !important;
+    position: fixed !important;
+    width: 60%;
+  }
+  
+
+  
+} 
+
+
+
+</style>
+
+
+
+```{r goals}
+gls <- read.csv(file = "data/Pitcher Targets.csv", stringsAsFactors = F) %>% filter(!is.element(stat, c("Home Run", "Hit")))
+annotate.targets <- function(x, targets = gls, stats = targets$stat){
+  targets %<>% filter(stat %in% stats)
+  x %>%
+    add_annotations(data = targets, x = ~stat, y = ~start, text = "<b>ACC<br>Starter", font = list(color = "rgb(49,146,54)"), name = ~stat, showarrow = F) %>%
+    add_annotations(data = targets, x = ~stat, y = ~all.acc, text = "<b>All-ACC", font = list(color = "rgb(76,81,247)"), name = ~stat, showarrow = F) %>%
+    add_annotations(data = targets, x = ~stat, y = ~first.team, text = "<b>1st Team", font = list(color = "rgb(157,77,187)"), name = ~stat, showarrow = F) %>%
+    add_annotations(data = targets, x = ~stat, y = ~poy, text = "<b>ACC POY", font = list(color = "rgb(243,175,25)"), name = ~stat, showarrow = F)
+}
+
+
+  make.elite.shape <- function(pside = "Right", pitch = "FB", color = "blue"){
+    x = tibble::tribble(
+  ~PitcherThrows, ~AutoPitchType,    ~RelSpeed,    ~HorzBreak, ~InducedVertBreak,
+  "Left",           "BB",  82.97,   14.66,     12.60,
+  "Left",           "CH",  84.26,  -6.55,      19.31,
+  "Left",           "FB",  91.12,  -4.39,      22.46,
+  "Right",          "BB",  84.31,  -0.10,      12.13,
+  "Right",          "CH",  84.20,  19.66,      18.064,
+  "Right",          "FB",  92.82,  16.60,      22.46,
+  "Left",           "BB",  70.83, -0.64,      -10.95,
+  "Left",           "CH",  74.76, -21.15,      0.92,
+  "Left",           "FB",  85.20, -17.70,      8.93,
+  "Right",          "BB",  73.06, -15.71,     -10.23,
+  "Right",          "CH",  75.97,  6.16,      -0.76,
+  "Right",          "FB",  85.89,  2.89,       8.24)
+    list(type = "rect", line = list(color = color, opacity = .2), name = pitch,
+         x0 = min(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"HorzBreak"]) / 12, 
+         x1 = max(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"HorzBreak"]) / 12, 
+         y0 = 2.525 + min(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"InducedVertBreak"]) / 12, 
+         y1 = 2.525 + max(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"InducedVertBreak"]) / 12, xref = "x", yref = "y")
+  }
+
+toOrdinals <- function(numbers){
+  ords <- c()
+  for(i in numbers) ords <- c(ords, toOrdinal::toOrdinal(i))
+  ords
+}
+```
+
+
+```{r data, include=F}
+
+data <- params$data %>% 
+  filter(!is.element(PitchCall, c("IntentionalBall", "Undefined", "Warmup")) & !is.element(TaggedPitchType, c("Und", "IntentionalBall", "Undefined"))) %>%
+  mutate(TaggedPitchType = ifelse(TaggedPitchType == "CU", "CB", TaggedPitchType),
+         Pitch_TM_Text = paste("<b>Result:</b>", Pitch_Result, "<br><b>Pitch:</b>", TaggedPitchType, round(RelSpeed), "mph<br><b>Count:</b>", Count, "<br>", Date, toOrdinals(Inning), "Inning", "<br><b>Batter:</b>", Batter),
+         PitchID = key,
+         First_Pitch = ifelse(Balls == 0 & Strikes == 0,
+                              ifelse(PitchCall == "BallCalled", "1st Pitch Ball", "1st Pitch Strike"), NA_character_),
+         Two_of_Three = ifelse((Balls + Strikes) == 3 | (Balls == 0 & Strikes == 2 & AB_End), ifelse(Balls > Strikes, "Started Behind", "Started Ahead"), NA_character_),
+         Reach = if_else(as.character(Reach) == "Didn't Reach", "Out", as.character(Reach)),
+         PlateLocSide_LHB = PlateLocSide - ifelse(BatterSide == "Left", 0, 100),
+         PlateLocSide_RHB = PlateLocSide - ifelse(BatterSide == "Right", 0, 100),
+         PitchType = TaggedPitchType
+         )
+levels(data$Reach) <- c("Reached Base", "Out")
+
+
+
+lhp <- mode(data$PitcherThrows) == "Left"
+dat <- SharedData$new(data)
+
+avgrelside <- mean(data$RelSide, na.rm = T)
+avgrelheight <- mean(data$RelHeight, na.rm = T)
+avgextension <- mean(data$Extension, na.rm = T)
+
+```
+
+```{r results='asis'}
+cat(
+  paste(
+    "<script>
+      var camerafront = '", ifelse(lhp, "LF", "RF"), "';
+      var cameraside = '", ifelse(lhp, "RF", "LF"), "';
+  </script>", sep = "")
+)
+```
+
+```{r bootstrap}
+
+tags$body(onload = "startup();",
+    # tags$h1(pitcher),
+    
+    tags$span(style = "position: absolute; top: 20px; right: 20px; z-index: 4; font-size: 18px;", onclick = "openNav()", "Menu"),
+    
+    tags$div(id = "menu", class = "overlay", 
+             tags$a(href = "javascript:void(0)", class = "closebtn", onclick = "closeNav()", "x"),
+             tags$div(class = "overlay-content",
+                      # tags$a(href = "2019 page", "Most Recent Game"),
+                      tags$a(href = paste0("https://micahdh.github.io/Pitchers/", pitcher, ".html"), "Home"),
+                      tags$a(href = paste0("https://micahdh.github.io/Pitchers/2019/", pitcher, ".html"), "This Season Only"),
+                      tags$a(href = paste0("https://micahdh.github.io/Pitchers/", params$pitcher, " Video Dropdown.html"), "Video")#,
+                      # tags$a(href = "", "Opponent Video")
+                      )),
+    
+bscols(widths = 12,
+    
+    
+       
+    ## Single Game/Multi-Game Filter that Turns Date from a slider to a select
+      
+    ###############################
+    ####        Filters        ####
+    ###############################
+    
+    ## we can do this same thing to show/hide general recs
+    tags$button("Filters", id = "showfilters", class = "btn-info", "data-toggle" = "collapse", "data-target" = "#filters"),
+    
+    tags$div(id = "filters", class = "collapse",
+             filter_select("game", "Game", dat, ~Game),
+             filter_select("month", "Month", dat, ~Month),
+             filter_select("year", "Year", dat, ~Year),
+             filter_select("scrim", "Game Type", dat, ~Scrimmage, multiple = T),
+             filter_select("hitter", "Hitter", dat, ~Batter, multiple = T),
+             filter_select("inning", "Inning", dat, ~Inning, multiple = T),
+             filter_select("pitches", "Pitch", dat, ~PitchType, multiple = T),
+             filter_select("counts", "Count", dat, ~Count, multiple = T),
+             filter_select("bhand", "Batter Hand", dat, ~BatterSide, multiple = T),
+             filter_select("pitchresult", "Pitch Result", dat, ~PitchCall, multiple = T),
+             filter_select("contactresult", "Contact Result", dat, ~PlayResult, multiple = T)
+      ),
+       ## can put has video, competition quality, midweek/weekend (use wday)
+       
+     # tags$button("clearbrush", onclick = "scatter.clearBrush();")
+
+    tags$div(id = "allvisuals",
+      
+    div(class = "row",
+        
+    div(id = "movement", class = "col-xs-12 col-md-6",#class = "visual",
+      plot_ly(dat, x = ~mvmt.x, y = ~mvmt.z, hovertext = ~Pitch_TM_Text, customdata = ~key) %>%
+        add_markers(color = ~TaggedPitchType) %>%
+        layout(title = "<br><b>Pitch Movement</b><br><i>Plate location of a pitch<br>that starts middle-middle)</i>",
+               margin = list(l = 0, r = 0, b = 0, t = 5, pad = 5),
+               xaxis = list(title = '', range = c(-3.25, 3.25), visible = F, fixedrange = T), 
+               yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                 images = list(
+                   list(
+                     source = raster2uri(readPNG("data/NCAA Baseball.png")), xref = "x", yref = "y", x = -gap, y = 2.525 - gap,
+                     sizex = 2 * gap, sizey = 2 * gap, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "bottom"
+                   ),
+                   list(
+                   source = raster2uri(readPNG(paste0("data/", "RHB ", ifelse(p.view, "P View ", ""), "Real Zone.png"))),
+                   xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5, #x = 1.5, y = 0, sizex = 1.5, sizey = 5
+                   sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+                   )
+                 ),
+                 shapes = list(
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "FB", color = "blue"),
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "CH", color = "green"),
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "BB", color = "red")
+                 ),
+                 legend = list(orientation = "h", x = 0, y = 0), 
+               dragmode = "lasso", margin = margin0) %>%
+        highlight(on = "plotly_selected", off = "plotly_deselect") %>%
+         onRender(hover.on.lasso)
+      ),
+    
+    
+    div(id = "velo", class = "col-xs-12 col-md-6",#class = "visual",
+      plot_ly(dat, y = ~RelSpeed, hovertext = ~Pitch_TM_Text, customdata = ~key) %>%
+        add_boxplot(color = ~TaggedPitchType, boxpoints = "all") %>%
+        layout(title = "<br><b>Velo by Pitch Type</b>", yaxis = list(title = "Velo (mph)"),
+               legend = list(orientation = "h", x= "FB", y = 60), margin = margin0, dragmode = "lasso") %>% 
+        highlight(on = "plotly_selected", off = "plotly_deselect") %>%
+        onRender(hover.on.lasso)
+      )
+    ),
+    
+    div(class = "row",
+      #### location   ####
+      div(id = "loclhb", class = "col-xs-12 col-md-6",#class = "visual",
+        plot_ly(dat, x = ~PlateLocSide_LHB, y = ~PlateLocHeight, customdata = ~key, hovertext = ~Pitch_TM_Text, marker = list(size = 8))%>%#, transforms = list(list(type = "filter", target = "customdata", operation = "=", value = "Left"))) %>%
+           add_markers(symbol = ~TaggedPitchType, symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, 
+                                                              "CH" = 15, "SL" = 18, "CB" = 17, "BB" = 17), 
+                       color = ~PitchCall, colors = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", 
+                                                      "Home Run" = "blue", "InPlay" = "blue", "BallCalled" = "forestgreen", 
+                                                      "BallIntentional" = "forestgreen", "StrikeCalled" = "red", 
+                                                      "StrikeSwinging" = "darkred", "FoulBall" = "darkred", 
+                                                      "HitByPitch" = "black",  "Undefined" = 'white', "Sacrifice" = "blue"),
+                       text = ~Pitch_TM_Text, showlegend = F, hoverinfo = "text") %>%
+           layout(title = "<br><b>Pitch Locations (vs. LHB)</b>",
+                  legend = list(x = 2, y = 5),
+                  margin = list(b = 0, t = 4, l = 0, r = 0, pad = 0),
+                  xaxis = list(title = '', range = c(-3, 3), visible = F, fixedrange = T), yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                  images = list(
+                    source = raster2uri(readPNG("/users/micahdaley-harris/Downloads/newplot (5).png")),#paste0("data/LHB P View Real Zone.png"))),
+                    xref = "x", yref = "y",  x = -4.65, y = -1.05, sizex = 8.67, sizey = 6.5,
+                    sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"), 
+                  dragmode = "lasso",
+                  margin = margin0) %>%
+          highlight("plotly_selected", off = "plotly_deselect") %>%
+          onRender(hover.on.lasso)#,
+        
+          #tags$img(src = "www/Pitch Locations Legend.png", height = "5%", width = "30%")
+        ),
+
+
+    
+    
+      div(id = "locrhb", class = "col-xs-12 col-md-6",#class = "visual",
+        plot_ly(dat, x = ~PlateLocSide_RHB, y = ~PlateLocHeight, customdata = ~key,  marker = list(size = 8), hovertext = ~Pitch_TM_Text)%>%#, transforms = list(list(type = "filter", target = "customdata", operation = "=", value = "Right"))) %>%
+           add_markers(symbol = ~TaggedPitchType, symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, 
+                                                              "CH" = 15, "SL" = 18, "CB" = 17, "BB" = 17), 
+                       color = ~PitchCall, colors = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", 
+                                                      "Home Run" = "blue", "InPlay" = "blue", "BallCalled" = "forestgreen", 
+                                                      "BallIntentional" = "forestgreen", "StrikeCalled" = "red", 
+                                                      "StrikeSwinging" = "darkred", "FoulBall" = "darkred", "HitByPitch" = "black", 
+                                                      "Undefined" = 'white', "Sacrifice" = "blue"),
+                       text = ~Pitch_TM_Text, showlegend = F, hoverinfo = "text") %>%
+           layout(title = "<br><b>Pitch Locations (vs. RHB)</b>",
+                  legend = list(x = -2, y = 5),
+                  margin = list(b = 0, t = 4, l = 0, r = 0, pad = 0),
+                  xaxis = list(title = '', range = c(-3, 3), visible = F, fixedrange = T), yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                  images = list(
+                    source = raster2uri(readPNG(paste0("data/RHB P View Real Zone.png"))),
+                    xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5,
+                    sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"), 
+                  dragmode = "lasso",
+                  margin = margin0) %>%
+           highlight("plotly_selected", off = "plotly_deselect") %>%
+          onRender(hover.on.lasso)#,
+          
+        #tags$img(src = "www/Pitch Locations Legend.png", height = "10%", width = "40%")
+        
+        )),
+      
+    tags$div(class = "legend", style = "z-index: 4", id = "locslegend", # needs to be conditional on screen width
+       tags$img(style = "position: relative;", src = "www/Pitch Locations Legend.png", height = "40%", width = "90%")),
+    
+    div(class = "row",
+      div(id = "release", class = "col-xs-12 col-md-6",
+    plot_ly(data = dat, x = ~RelSide, y = ~RelHeight, customdata = ~key) %>%
+      add_markers(color = ~ifelse(PitchCall %in% c("BallCalled", "HitByPitch"), "Ball", "Strike"), opacity = .7, 
+                  colors = c("Ball" = "green", "Strike" = "red"), symbol = ~TaggedPitchType,
+                  symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CB" = 17, "BB" = 17)) %>%
+      layout(title = "<br><b>Release Point", dragmode = "lasso",
+             xaxis = list(range = sort(c(avgrelside + 5, avgrelside - 3)), visible = F),
+             yaxis = list(range = c(2, 7), visible = F), 
+             #images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/", commasplit(pitcher), ".png"))),
+             images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/Tyler Baum.png"))),
+                           xref = "x", yref = "y", sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below",
+                           x = avgrelside - 3.5 * lhp, y = 0, sizex = 3.5, sizey = avgrelheight),
+             margin = margin0) %>%
+      highlight(on = "plotly_selected", off = "plotly_deselect") %>%
+      onRender(hover.on.lasso)
+    ),
+
+    
+    
+    div(id = "extension",class = "col-xs-12 col-md-6",
+        plot_ly(data = dat, x = ~Extension, y = ~RelHeight, customdata = ~key) %>%
+          add_markers(color = ~ifelse(PitchCall %in% c("BallCalled", "HitByPitch"), "Ball", "Strike"), opacity = .7, 
+                      colors = c("Ball" = "green", "Strike" = "red"), symbol = ~TaggedPitchType, 
+                      symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CB" = 17, "BB" = 17)) %>%
+          layout(title = "<br><b>Release Point", dragmode = "lasso",
+             xaxis = list(range = sort(c(avgextension + 5, avgextension - 3)), visible = F),
+             yaxis = list(range = c(2, 7), visible = F), 
+             images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/Baum, Tyler Extension.png"))),
+                           xref = "x", yref = "y", sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below",
+                           x = avgextension - 1.5, y = 0, sizex = 3.5, sizey = avgrelheight),
+             margin = margin0) %>%
+          highlight(on = "plotly_selected", off = "plotly_deselect")  %>%
+          onRender(hover.on.lasso)
+         )  
+      ),
+    
+    tags$div(class = "row",
+      tags$div(id = "spin", class = "col-xs-12 col-md-6",
+          plot_ly(data = dat, r = ~SpinRate, theta = ~SpinAxis, type = "scatterpolar", mode = "markers", color = ~TaggedPitchType, customdata = ~key) %>% 
+            layout(title = "<br><b>Spin Rate and Spin Direction</b>", titlefont = list(size = 20), 
+             dragmode = "pan",# margin = list(b = 4, t = 8, l = 4, r = 4, pad = 4),
+             polar = list(title = "Spin Direction", 
+                          radialaxis = list(range = c(0, 3500), title = "Spin Rate\n(full spins per minute)", 
+                                            titlefont = list(family = "Arial", color = "red", size = 16)), 
+                          angularaxis = list(rotation = 180, tickmode = "array", tickvals = seq(0, 330, length.out = 12), 
+                                             ticktext = paste(c(9:1, 12:8), "00", sep = ":"))),
+             dragmode = "lasso"
+             ) %>% 
+            highlight(on = "plotly_selected", off = "plotly_deselect") %>%
+            onRender(hover.on.lasso)
+    )
+    ),
+    
+   tags$div(class = "row",
+      tags$div(id = "stats1", class = "col-xs-12 col-md-6",#class = "visual", 
+       plot_ly(data = data, showlegend = T, alpha = 0.5) %>%
+         # K/BB/HR
+         add_histogram(x = ~Tru3, histnorm = "probability", color = I("black"), name = "Full Data") %>% 
+         add_histogram(data = dat, x = ~Tru3, histnorm = "probability", color = I("pink"), name = "Selected Data") %>% 
+         annotate.targets(stats = c("Strikeout", "Walk")) %>%
+         layout(title = "<br><b>Stats Each Time Thru the Lineup<br>(out of 9)", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = "", categoryorder= "array", 
+                             categoryarray = c("Strikeout", "Walk", "Home Run", "In Play")),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, length.out = 10), ticktext = c(0:9)),
+                legend = list(orientation = "h", x= "Walk", y = .9), margin = margin0) %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect")
+       # p("Everything is per 9 Plate Appearances except the Hard Hit/Not Hard Hit (per 9 contacts).
+      ),
+      
+      
+    
+      div(id = "stats2", class = "col-xs-12 col-md-6",#class = "visual",
+          plot_ly(data = data, showlegend = F, alpha = 0.5) %>%
+          # Reach/Hard Hit
+            add_histogram(x = ~Reach, histnorm = "probability", color = I("black"), name = "Full Data", showlegend = T) %>%
+            add_histogram(x = ~Hard_Hit, histnorm = "probability", color = I("black"), name = "Full Data") %>%
+            add_histogram(data = dat, x = ~Reach, histnorm = "probability", color = I("pink"), name = "Selected Data", showlegend = T) %>%
+            add_histogram(data = dat, x = ~Hard_Hit, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+            annotate.targets(stats = "Out") %>%
+            layout(title = "<br><b>Stats Each Time Thru the Lineup<br>(out of 9)", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = "", categoryorder= "array", 
+                             categoryarray = c("Reached Base", "Not Hard Hit", "Hard Hit")),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, length.out = 10), ticktext = c(0:9)),
+                legend = list(orientation = "h", x= 0.5, y = .9), margin= margin0) %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect")
+      )
+     ),
+    
+    div(class = "row",
+    
+       div(id = "stats3", class = "col-xs-12 col-md-6",#class = "visual",
+           plot_ly(data = data, showlegend = F, alpha = 0.5) %>%
+             # Ahead/Behind
+             add_histogram(x = ~First_Pitch, histnorm = "probability", color = I("black"), name = "Full Data", showlegend = T) %>%
+             add_histogram(x = ~Two_of_Three, histnorm = "probability", color = I("black"), name = "Full Data") %>%
+             add_histogram(data = dat, x = ~First_Pitch, histnorm = "probability", color = I("pink"), name = "Selected Data", showlegend = T) %>%
+             add_histogram(data = dat, x = ~Two_of_Three, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+            layout(title = "<br><b>Stats Each Time Thru the Lineup<br>(out of 9)", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = ""),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, length.out = 10), ticktext = c(0:9)),
+                legend = list(orientation = "h", x= .5, y = .9), margin = margin0) %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect")
+       ),
+
+  
+    
+   
+    tags$div(id = "battedballtype", class = "col-xs-12 col-md-6",#class = "visual",
+      plot_ly(data = dat, name = "Batted Ball Types") %>% 
+      add_histogram(x = ~BBtype, histnorm = "probability") %>% 
+      layout(yaxis = list(range = c(0, 1), label = ""), title = "<br><b>Batted-Ball Type", margin = margin0) %>%
+      highlight(on = "plotly_selected", off = "plotly_deselect")) #%>%
+      #onRender(video.on.click))
+
+    )#,
+    
+    # br(),
+    # br()
+
+    
+    ),
+   
+   ##  Only if it's a phone
+  tags$div(id = "hoverinfo", style = "z-index: 4; width: 40%; position: relative;",
+                  "Circle a Pitch to see additional info here"),
+  
+    ####  Video Buttons   ####
+tags$span(id = "videobuttons", class = "legend", #style = "display: block;", #style = "right: 10%; display: inline; z-index: 3;", #position: absolute;
+         tags$button(style = "z-index: 7;", class = "btn-success", tags$a(style = "color: black;", id = "tvfeed", target = "_blank", "TV")),
+         tags$button(class = "btn-success", tags$a(style = "color: black;", id = "highspeedfront", target = "_blank", "Front")),
+         tags$button(class = "btn-success", tags$a(style = "color: black;", id = "highspeedside", target = "_blank", "Side"))
+         ),
+
+    
+  ##############################
+  ####    Select Visual     ####
+  ##############################
+  
+  ## could be cool to turn this into a dropdown -- would also smooth the process
+  ## of adding a second, etc visuals (just a second dropdown with the number tbh)
+  
+  ## make the whole footer collapsible
+  # tags$div(id = "avgsbtns", class = "noshow2start", style = "right: 0px; bottom: 9%; width: 35%; position: fixed; z-index: 5; align: right;",
+  #   tags$button("Stats A", onclick = "showstats1()", class = "btn-primary", style = "display: block;"),
+  #   tags$button("Stats B", onclick = "showstats2()", class = "btn-primary", style = "display: block:"),
+  #   tags$button("Stats C", onclick = "showstats3()", class = "btn-primary", style = "display: block;"),
+  #   tags$button("Contact Type", onclick = "showbattedballtype()", class = "btn-primary", style = "display: block;")
+  # ),
+  # 
+  # tags$footer(
+  #   tags$div(id = "changevisual", #style = "width: 55%; height: 15%; left: 0px; margin: 0; padding: 0;",#class = "collapse",
+  #       tags$button("Movement", onclick = "showmovement()", class = "btn-primary"),
+  #       tags$button("Velo", onclick = "showvelo()", class = "btn-primary"),
+  #       tags$button("Location LHB", onclick = "showloclhb()", class = "btn-primary"),
+  #       tags$button("Location RHB", onclick = "showlocrhb()", class = "btn-primary"),
+  #       tags$button("Release", onclick = "showrelease()", class = "btn-primary"),
+  #       tags$button("Extension", onclick = "showextension()", class = "btn-primary"),
+  #       tags$button("Spin", onclick = "showspin()", class = "btn-primary"),
+  #       tags$button(class = "btn-primary", "Avgs", onclick = "showavgsbtns()"),
+  #       tags$button(class = "btn btn-success", tags$a(id = "videodrop", href = paste(params$pitcher, "Video Dropdown.html"), "Video"))
+  #     
+  #   ) 
+  # )
+  
+  tags$footer(
+    # tags$button(class = "btn btn-success", tags$a(id = "videodrop", href = paste(params$pitcher, "Video Dropdown.html"), "Video")),
+    tags$select(id = "newvisual",
+                tags$option("Change Visual"),
+                tags$option("Movement", value = 1),
+                tags$option("Velo", value = 2),
+                tags$option("Location LHB", value = 3),
+                tags$option("Location RHB", value = 4),
+                tags$option("Release", value = 5),
+                tags$option("Extension", value = 6),
+                tags$option("Spin", value = 7),
+                tags$option("Stats Part 1", value = 8),
+                tags$option("Stats Part 2", value = 9),
+                tags$option("Stats Part 3", value = 10),
+                tags$option("Contact Type", value = 11)
+                ),
+    tags$button("Go", onclick = "changevisual();")
+    
+  )
+  
+  #tags$button("Change Visual", id = "showvisual", class = "btn-info", "data-toggle" = "collapse", "data-target" = "#changevisual"),
+
+)
+)
+    # tags$a(id = "showhotcold", class = "footer", href = paste0("https://micahdh.github.io/Hot_Cold_Zones/Pitcher/", gsub(params$pitcher, pattern = " ", replacement = "_"), "_Hot_Cold_Zones.pdf"), tags$img(src = "www/Hot Cold Icon.png"))
+```

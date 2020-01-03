@@ -1,0 +1,36 @@
+---
+title: "Crosstalk Bug"
+author: "Micah Daley-Harris"
+date: "3/16/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+
+```{r cars}
+require(crosstalk)
+require(plotly)
+
+iris$other_factor <- sample(x = c("a", "b", "c"), size = nrow(iris), replace = T)
+iris_shared <- SharedData$new(iris)
+
+bscols(widths = c(6, 6, 6, 6),
+  filter_select("species", "species", iris_shared, ~Species, multiple = T),
+  filter_select("otherfactor", "other factor", iris_shared, ~other_factor, multiple = T),
+  
+  plot_ly(data = iris_shared, x = ~Sepal.Length, y = ~Sepal.Width, color = ~Species) %>%
+    add_markers() %>%
+    layout(dragmode = "lasso") %>%
+    highlight(on = "plotly_selected", off = "plotly_deselect"),
+  
+  plot_ly(data = iris_shared, x = ~Petal.Length, y = ~Petal.Width, color = ~Species) %>%
+    add_markers() %>%
+    layout(dragmode = "lasso") %>%
+    highlight(on = "plotly_selected", off = "plotly_deselect")
+)
+
+```
+

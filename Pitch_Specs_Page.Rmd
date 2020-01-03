@@ -1,0 +1,522 @@
+---
+output: html_document
+params:
+  data:
+    value: x
+  pitcher:
+    value: x
+#   allpitchers:
+#     value: x
+---
+
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="http://code.jquery.com/jquery-1.11.1.min.js">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js">
+
+<link rel="stylesheet" href = "www/style.css">
+
+<style>
+body { 
+  top: 30px;
+  background-image: url('https://www.publicdomainpictures.net/pictures/100000/nahled/baseball-field-grass-turf.jpg');
+}
+
+h1 { 
+  color: lightblue;
+}
+
+.button {
+  color: navy;
+  border: 3px solid #19F7F7;
+  font-size: 50px;
+  border-radius: 50%;
+}
+
+.row {
+  display: block;
+  float: left;
+  clear: left;
+  margin: 10vw; 
+  width: 80vw; 
+  height: 40vh;
+}
+
+footer {
+  background: #2db34a;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+}
+
+</style>
+
+
+<!-- style = "list-style-image: url('stats.jpg');" -->
+
+
+
+
+
+
+```{r setup, include=FALSE, message=F}
+
+
+## load packages, source Hot Cold, define custom functions, strikezone and gap
+
+library(knitr)
+opts_chunk$set(echo = F, warning = F)
+library(magrittr)
+library(crosstalk)
+library(plotly)
+library(assertthat)
+library(png)
+library(dplyr)
+library(htmltools)
+
+source("HotCold2018.R")
+
+
+####  Functions:    ####
+mode <- function(x) rev(names(sort(table(x))))[1]
+
+commasplit <- function(string){
+  split <- strsplit(string, ", ", fixed = TRUE)
+  return(paste(split[[1]][2], split[[1]][1]))
+}
+
+psplit <- function(x) strsplit(x = x, split = ", ")[[1]][1]
+
+color.by.value <- function(values, cols, interval, min.val, replacena = NA, printnas = F){
+  
+  #values[which(values == 1)] <- c(.99)
+  values[which(values <= min.val)] <- min.val
+  values[which(values > (min.val + interval * (length(cols) - 1)))] <- c(min.val + interval * (length(cols) - 1)) - interval / 100
+  values <- round_any(values, interval, floor)
+  withcols <- data.frame(Value = as.numeric(values), id = c(1:length(values)))
+  withcols$Value <- as.character(withcols$Value)
+  key <- data.frame(Value = seq(min.val, min.val + interval * (length(cols) - 1), by = interval), Col = cols)
+  withcols <- merge(withcols, key, by = "Value", all.x = T, all.y = F)
+  withcols$Col <- as.character(withcols$Col)
+  
+  if(printnas){
+    print(withcols[which(is.na(withcols$Col)), "Value"])
+  }
+  withcols[which(is.na(withcols$Col)), "Col"] <- c(replacena)
+  #return(withcols)
+  return(as.character(withcols[order(withcols$id, decreasing = F), "Col"]))
+}
+
+
+
+  make.elite.shape <- function(pside = "Right", pitch = "FB", color = "blue"){
+    x = tibble::tribble(
+  ~PitcherThrows, ~AutoPitchType,    ~RelSpeed,    ~HorzBreak, ~InducedVertBreak,
+  "Left",           "BB",  82.97,   14.66,     12.60,
+  "Left",           "CH",  84.26,  -6.55,      19.31,
+  "Left",           "FB",  91.12,  -4.39,      22.46,
+  "Right",          "BB",  84.31,  -0.10,      12.13,
+  "Right",          "CH",  84.20,  19.66,      18.064,
+  "Right",          "FB",  92.82,  16.60,      22.46,
+  "Left",           "BB",  70.83, -0.64,      -10.95,
+  "Left",           "CH",  74.76, -21.15,      0.92,
+  "Left",           "FB",  85.20, -17.70,      8.93,
+  "Right",          "BB",  73.06, -15.71,     -10.23,
+  "Right",          "CH",  75.97,  6.16,      -0.76,
+  "Right",          "FB",  85.89,  2.89,       8.24)
+    list(type = "rect", line = list(color = color, opacity = .2), name = pitch,
+         x0 = min(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"HorzBreak"]) / 12, 
+         x1 = max(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"HorzBreak"]) / 12, 
+         y0 = 2.525 + min(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"InducedVertBreak"]) / 12, 
+         y1 = 2.525 + max(x[which(x$PitcherThrows == pside & x$AutoPitchType == pitch),"InducedVertBreak"]) / 12, xref = "x", yref = "y")
+  }
+
+  
+targets <- read.csv(file = "data/Pitcher Targets.csv", stringsAsFactors = F)[-4,]
+
+
+####  Values    ####
+gap <- 17 / 12 / 7
+strikezone <- data.frame(x = c(-0.7083, -0.7083, 0.7083, 0.7083, -0.7083), z = c(1.75, 3.3, 3.3, 1.75, 1.75))
+```
+
+
+
+```{r message=F}
+# params <- list(data = "x", pitcher = "Baum, Tyler")
+## Load data based on params
+if(params$data != "x"){
+  data <- params$data
+  if(!all(is.element(c("mvmt.x", "mvmt.z", "Pitch_Result"), colnames(data)))){
+    data %<>% mutate(mvmt.x = (HorzBreak / 12) * ifelse(p.view, 1, -1), 
+                     mvmt.z = (2.525 + InducedVertBreak / 12), 
+                     PitchResult = ifelse(PitchCall != "InPlay", PitchCall, ifelse(PlayResult != "Out", paste(HitType, PlayResult))))
+  }
+} else{
+  data <- read.csv(file = "data/uncall.csv")
+}
+
+data %<>% filter(!is.element(PitchCall, c("IntentionalBall", "Undefined")) & TaggedPitchType != "Und") %>%
+  mutate(First_Pitch = ifelse(Balls == 0 & Strikes == 0,
+                              ifelse(PitchCall == "BallCalled", "1st Pitch Ball", "1st Pitch Strike"), NA_character_),
+         Two_of_Three = ifelse((Balls + Strikes) == 3 | (Balls == 0 & Strikes == 2 & AB_End), ifelse(Balls > Strikes, "Started Behind", "Started Ahead"), NA_character_),
+         Reach = if_else(as.character(Reach) == "Didn't Reach", "Out", as.character(Reach)))
+
+levels(data$Reach) <- c("Reached Base", "Out")
+
+## Filter to pitcher if given 
+## if data is given but no pitcher, all data is used but a warning is thrown if there are multiple pitchers in the sample
+if(params$pitcher != "x"){
+  pitcher <- params$pitcher
+  data %<>% filter(Pitcher == pitcher)
+} else{
+  pitcher <- mode(data$Pitcher)
+  validate_that(length(unique(data$Pitcher)) == 1)
+}
+#assert_that(nrow(data) < 60000)
+
+p.view = T
+
+lhp <- as.logical(mode(data$PitcherThrows) == "Left")
+avgrelside <- mean(data$RelSide, na.rm = T)
+avgrelheight <- mean(data$RelHeight, na.rm = T)
+avgextension <- mean(data$Extension, na.rm = T)
+
+shared.data <- SharedData$new(data)
+```
+
+
+---
+title: `r paste("Pitch Movement ...", pitcher)`
+---
+
+
+```{r message = F}
+round_any <- plyr::round_any
+# arrow <- function(id, dir) 
+#    div(style = "position: fixed; left: 0; bottom: 0;", 
+#        a(href = paste0("#", id), style = "float: left; display: inline-block;", tags$button(class = 'button', span(class = paste0('glyphicon glyphicon-circle-arrow-', dir), style = 'display: block;'))),
+#        a(href = paste0("#", id), style = "float: right; display: inline-block;", tags$button(class = 'button', span(class = paste0('glyphicon glyphicon-circle-arrow-', dir), style = 'display: block;'))))
+
+
+arrow <- function(id, dir)
+   div(a(href = paste0("#", id), style = paste0("float: left; display: inline-block;"), tags$button(class = 'button', span(class = paste0('glyphicon glyphicon-circle-arrow-', dir), style = 'display: block;'))),
+     a(href = paste0("#", id), style = paste0("float: right; display: inline-block;"), tags$button(class = 'button', span(class = paste0('glyphicon glyphicon-circle-arrow-', dir), style = 'display: block;'))))
+```
+
+<body>
+
+```{r}
+bscols(widths = c(2, 10), device = "xs",
+       "home button",
+       "menu bar")
+
+```
+
+```{r}
+bscols(widths = c(2, 3, 5, 2), device = "xs",
+       NA,
+       "single game or multigame",
+       "pick date",
+       NA)
+
+```
+
+```{r}
+bscols(widths = c(2, 8, 2), device = "xs",
+       
+       #h2("Filters")#,
+       # div(id = "filters", class = "row",
+       #   filter_slider("date", "Date", shared.data, ~as.Date(yyyymmdd)),
+       #   filter_select("pitches", "Pitch", shared.data, ~TaggedPitchType, multiple = T),
+       #   filter_checkbox("counts", "Count", shared.data, ~Count, inline = T),
+       #   filter_checkbox("phand", "Batter Hand", shared.data, ~BatterSide, inline = T))#,
+       #arrow"stats", "down"),
+       #br(), br(), br(),
+#        div(id = "downbutton", class = "container",
+# tags$button(type = "button", onclick = "nxtsection()", style = 'position: fixed; right: 20px; bottom: 20px; background-color: #19F7F7; font-size: 60px',
+# span(class = 'glyphicon glyphicon-circle-arrow-down'))),
+       
+  #div(class = "container-fluid",     
+       ####   Stats   ####
+  bscols(widths = 12, device = "xs",
+      div(id = "stats", class = "row", 
+       plot_ly(data = data, showlegend = F, alpha = 0.5) %>%#
+         add_histogram(x = ~Reach, histnorm = "probability", color = I("black"), name = "Full Data", showlegend = T) %>%
+         add_histogram(x = ~Tru3, histnorm = "probability", color = I("black"), name = "Full Data") %>% 
+         add_histogram(x = ~Hard_Hit, histnorm = "probability", color = I("black"), name = "Full Data") %>%
+         add_histogram(x = ~First_Pitch, histnorm = "probability", color = I("black"), name = "Full Data") %>%
+         add_histogram(x = ~Two_of_Three, histnorm = "probability", color = I("black"), name = "Full Data") %>%
+         
+         add_histogram(data = shared.data, x = ~Reach, histnorm = "probability", color = I("pink"), name = "Selected Data", showlegend = T) %>%
+         add_histogram(data = shared.data, x = ~Tru3, histnorm = "probability", color = I("pink"), name = "Selected Data") %>% 
+         add_histogram(data = shared.data, x = ~Hard_Hit, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+         add_histogram(data = shared.data, x = ~First_Pitch, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+         add_histogram(data = shared.data, x = ~Two_of_Three, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+         
+         add_annotations(data = targets, x = ~stat, y = ~start, text = "<b>ACC<br>Starter", font = list(color = "rgb(49,146,54)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = targets, x = ~stat, y = ~all.acc, text = "<b>All-ACC", font = list(color = "rgb(76,81,247)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = targets, x = ~stat, y = ~first.team, text = "<b>1st Team", font = list(color = "rgb(157,77,187)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = targets, x = ~stat, y = ~poy, text = "<b>ACC POY", font = list(color = "rgb(243,175,25)"), name = ~stat, showarrow = F) %>%
+         
+         layout(title = "<b>Stats Each Time Thru the Lineup (out of 9)", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = "", categoryorder= "array", categoryarray = c("Strikeout", "Walk", "Home Run", "In Play", "Reached Base", "Not Hard Hit", "Hard Hit")),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, length.out = 10), ticktext = c(0:9))) %>%
+         highlight(on = "plotly_selected", off = "plotly_doubleclick")),
+       # p("Everything is per 9 Plate Appearances except the Hard Hit/Not Hard Hit (per 9 contacts).
+       # The idea is these numbers are what you'd rack up in after facing a lineup 1 time all the way through.")
+       # )#,
+#arrow"filters", "up"),
+#arrow"movement", "down"),
+
+  
+       
+       
+      ####  movement    ####
+    div(id = "movement", class = "row",
+      plot_ly(shared.data, x = ~mvmt.x, y = ~mvmt.z) %>%
+        add_markers(color = ~TaggedPitchType, hoverinfo = "none") %>%
+        layout(title = "<br><b>Pitch Movement</b><br><i>(Plate location of a pitch that starts middle-middle)</i>",
+               margin = list(l = 0, r = 0, b = 0, t = 5, pad = 5),
+               xaxis = list(title = '', range = c(-3.25, 3.25), visible = F, fixedrange = T), 
+               yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                 images = list(
+                   list(
+                     source = raster2uri(readPNG("data/NCAA Baseball.png")), xref = "x", yref = "y", x = -gap, y = 2.525 - gap,
+                     sizex = 2 * gap, sizey = 2 * gap, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "bottom"
+                   ),
+                   list(
+                   source = raster2uri(readPNG(paste0("data/", "RHB ", ifelse(p.view, "P View ", ""), "Real Zone.png"))),
+                   xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5, #x = 1.5, y = 0, sizex = 1.5, sizey = 5
+                   sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+                   )
+                 ),
+                 shapes = list(
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "FB", color = "blue"),
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "CH", color = "green"),
+                   make.elite.shape(pside = ifelse(lhp, "Left", "Right"), pitch = "BB", color = "red")
+      
+                 ),
+                 dragmode = "lasso") %>%
+        highlight(on = "plotly_selected", off = "plotly_deselect")),
+#arrow"stats", "up"),
+#arrow"velo", "down"),
+h4(style='color: white; text-float: middle', "Pitches inside the boxes have average pitch movement (for Division I).", br(), "(heater in blue, change in green, breaker in red)", br(), strong(em(style = 'color: lightblue;', "Don't be average."))),
+      
+      
+      
+      
+      
+      #### velo ####
+    div(id = "velo", class = "row", style = "display: none;",
+      plot_ly(shared.data, y = ~RelSpeed) %>%
+        add_boxplot(color = ~TaggedPitchType, boxpoints = "all") %>%
+        layout(title = "<br><b>Velo by Pitch Type</b>", yaxis = list(title = "Velo (mph)")) %>% 
+        highlight(on = "plotly_selected", off = "plotly_deselect")
+      ),
+  #arrow"movement", "up"),
+  #arrow"release", "down"),
+      
+  
+    ####  Release Point   ####
+  div(id = "release", class = "row", style = "display: none;",
+    plot_ly(data = shared.data, x = ~RelSide, y = ~RelHeight) %>%
+      add_markers(color = ~ifelse(PitchCall %in% c("BallCalled", "HitByPitch"), "Ball", "Strike"), opacity = .7, colors = c("Ball" = "green", "Strike" = "red"), symbol = ~TaggedPitchType) %>%
+      layout(title = "Release Point", hovermode = "lasso",
+             xaxis = list(range = sort(c(avgrelside + 5, avgrelside - 3)), visible = F),
+             yaxis = list(range = c(2, 7), visible = F), 
+             #images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/", commasplit(pitcher), ".png"))),
+             images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/Tyler Baum.png"))),
+                           xref = "x", yref = "y", sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below",
+                           x = avgrelside - 3.5 * lhp, y = 0, sizex = 3.5, sizey = avgrelheight)) %>%
+      highlight(on = "plotly_selected", off = "plotly_deselect")
+    ),
+  #arrow"velo", "up"),
+  #arrow"extension", "down"),
+    
+    div(id = "extension", class = "row", style = "display: none;",
+        plot_ly(data = shared.data, x = ~Extension, y = ~RelHeight) %>%
+      add_markers(color = ~ifelse(PitchCall %in% c("BallCalled", "HitByPitch"), "Ball", "Strike"), opacity = .7, colors = c("Ball" = "green", "Strike" = "red"), symbol = ~TaggedPitchType) %>%
+      layout(title = "Release Point", hovermode = "lasso",
+             xaxis = list(range = sort(c(avgextension + 5, avgextension - 3)), visible = F),
+             yaxis = list(range = c(2, 7), visible = F), 
+             images = list(source = raster2uri(readPNG(paste0("data/Release Point Pics/Baum, Tyler Extension.png"))),
+                           xref = "x", yref = "y", sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below",
+                           x = avgextension - 1.5, y = 0, sizex = 3.5, sizey = avgrelheight)) %>%
+      highlight(on = "plotly_selected", off = "plotly_deselect")),
+
+      # if(xvar == "Extension"){
+      #   img.list <- list(source = raster2uri(img), xref = "x", yref = "y", x = meanx - 2, y = 0, sizex = 3.5, sizey = meanz, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below")
+      # } 
+      # 
+    
+#arrow"velo", "up"),
+#arrow"spin", "down"),
+    
+  
+    ####    spin   ####
+  div(id = "spin", class = "row", style = "display: none;",
+    plot_ly(data = shared.data, r = ~SpinRate, theta = ~SpinAxis, type = "scatterpolar", mode = "markers", color = ~TaggedPitchType) %>% 
+      layout(title = "<br><b>Spin Rate and Spin Direction</b>", titlefont = list(size = 20), 
+             dragmode = "lasso", margin = list(b = 0, t = 4, l = 0, r = 0, pad = 0),
+             polar = list(title = "Spin Direction", radialaxis = list(range = c(0, 3500), title = "Spin Rate\n(full spins per minute)", titlefont = list(family = "Arial", color = "red", size = 16)), angularaxis = list(rotation  = 180, tickmode = "array", tickvals = seq(0, 330, length.out = 12), ticktext = paste(c(9:1, 12:8), "00", sep = ":")))) %>% 
+      highlight(on = "plotly_selected", off = "plotly_deselect")
+    ),
+#arrow"release", "up"),
+#arrow"location", "down"),
+
+#hidden(
+#br(),
+
+
+
+
+  ## avgs
+  
+  # by date (spin, movement)
+
+    
+  #### location   ####
+      div(id = "location", class = "row", style = "display: none;",
+        plot_ly(shared.data, x = ~PlateLocSide, y = ~PlateLocHeight, transforms = list(list(type = "filter", target = "customdata", operation = "=", value = "Left"))) %>%
+           add_markers(symbol = ~TaggedPitchType, symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CU" = 17, "BB" = 17), 
+                       color = ~PitchCall, colors = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "InPlay" = "blue", "BallCalled" = "forestgreen", "BallIntentional" = "forestgreen", 
+                                                      "StrikeCalled" = "red", "StrikeSwinging" = "darkred", "FoulBall" = "darkred", "HitByPitch" = "black",  "Undefined" = 'white', "Sacrifice" = "blue"),
+                       text = ~Pitch_TM_Text, hoverinfo = "text", showlegend = F) %>%
+           layout(title = "<br><b>Pitch Locations (vs. LHB)</b>",
+                  legend = list(x = 2, y = 5),
+                  margin = list(b = 0, t = 4, l = 0, r = 0, pad = 0),
+                  xaxis = list(title = '', range = c(-2.5, 2.5), visible = F, fixedrange = T), yaxis = list(title = '', range = c(-0.25, 5), showgrid = F, visible = F, fixedrange = T),
+                  images = list(
+                    source = raster2uri(readPNG(paste0("data/LHB P View Real Zone.png"))),
+                    xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5,
+                    sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"), 
+                  dragmode = "lasso") %>%
+           highlight("plotly_selected", off = "plotly_doubleclick")),
+
+    #arrow"spin", "up"),
+    #arrow"locrhb", "down"),
+    
+   #  br(),
+         ## RHB ##
+      div(id = "locrhb", class = "row", style = "display: none;",
+        plot_ly(shared.data, x = ~PlateLocSide, y = ~PlateLocHeight, transforms = list(list(type = "filter", target = "customdata", operation = "=", value = "Right"))) %>%
+           add_markers(symbol = ~TaggedPitchType, symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CU" = 17, "BB" = 17), 
+                       color = ~PitchCall, colors = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "InPlay" = "blue", "BallCalled" = "forestgreen", "BallIntentional" = "forestgreen", 
+                                                      "StrikeCalled" = "red", "StrikeSwinging" = "darkred", "FoulBall" = "darkred", "HitByPitch" = "black",  "Undefined" = 'white', "Sacrifice" = "blue"),
+                       text = ~Pitch_TM_Text, hoverinfo = "text", showlegend = F) %>%
+           layout(title = "<br><b>Pitch Locations (vs. RHB)</b>",
+                  legend = list(x = -2, y = 5),
+                  margin = list(b = 0, t = 4, l = 0, r = 0, pad = 0),
+                  xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = T), yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                  images = list(
+                    source = raster2uri(readPNG(paste0("data/RHB P View Real Zone.png"))),
+                    xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5,
+                    sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"), 
+                  dragmode = "lasso") %>%
+           highlight("plotly_selected", off = "plotly_doubleclick")),#,
+#arrow"location", "up"),
+#arrow"hotcold", "down"),
+
+  div(id = "hotcold", style = "display: none;", plot.pitcher.hot.cold(pitcher.hot.cold(data), save = F))
+
+)
+#div(id = "hotcold", style = "align: center", arrow"spin", "up"))#; margin: 10vw; width: 8vw; height: 40vh;
+)    
+
+  
+  ####  result  ####
+  # plot_ly(shared.data) %>% 
+  #   add_fun(function(p){
+  #     p %>% 
+  #       mutate(Pitch_Res = ifelse(InPlay == 0, PlayResult, PitchCall)) %>%
+  #       add_histogram(x = ~Pitch_Res, histnorm = "probability")
+  #     
+  #   }) %>%
+  #   layout(title = "<b>Pitch Results</b>", titlefont = list(size = 20)) %>% 
+  #   plotly_json()
+  #   highlight(on = "plotly_selected", off = "plotly_deselect")
+  
+  
+#)
+
+
+```
+
+
+```{r}
+bscols(widths = c(2, 10, 2), device = "xs",
+       NA,
+       div(id = "caption", "Currently showing..."),
+       NA
+       )
+
+```
+
+```{r}
+bscols(widths = c(4, 4, 4), device = "xs",
+         div(id = "spin_descrip",
+img(style = "width: 170px; display: inline;", src='www/sidespin 12.gif'),
+img(style = "width: 170px; display: inline;", src='www/backspin.gif'),
+img(style = "width: 170px; display: inline;", src='www/sidespin 6.gif'),
+img(style = "width: 170px; display: inline;", src='www/topspin.gif')),
+       "button",
+       "button"
+)
+
+```
+
+
+<script>
+function showlist() {
+    var list = document.getElementById("selectsection");
+
+    if (list.style.display == "none"){
+        list.style.display = "block";
+    } else{
+        list.style.display = "none";
+    }
+}
+
+</script>
+
+
+<div id = "selectsection" class = "footer" style="background-color: grey; bottom: 0px; height: 120px; position: fixed;">
+<!-- position: fixed;display: none; bottom: 0px; height: 20px; zindex: 2 -->
+<ul>
+<li><img src='itunes.png' style="height: 20px; width: 20px"><a href="#stats">Stats</a></li>
+<li><a href="#movement">Movement</a></li>
+<li><a href="#velo">Velo</a></li>
+<li><a href="#release">Release Point</a></li>
+<li><a href="#spin">Spin</a></li>
+<li><a href="#location">Location</a></li>
+</ul>
+</div>
+
+
+<!-- <div class="footer" style ="position: fixed; display: block; height: 20px;"> -->
+<!--   <button onclick = "showlist()"> -->
+<!--   <h4>Change Section</h4> -->
+<!--   </button> -->
+<!-- </div> -->
+
+```{r eval=F}
+if("allpitchers" %in% names(params)){
+  allpitchers <- params$allpitchers
+  asis_output(c("<br><br><h2 style='color: white'>See a Different Player's Page</h2>",
+              paste0("<a href='../Pitch_Specs/", 
+                     paste0(gsub(sort(allpitchers), pattern = " ", replacement = "_"), "_Pitch_Specs.html'>"), 
+                     "<img width=100px", "display=inline-block src='data/headshots/", 
+                     gsub(sort(allpitchers), pattern = " ", replacement = ""), ".jpg'><a/>")))
+}
+
+
+ style="display: none;"
+
+```
+
+```{r}
+##  improvement: mvmt avgs with percentiles?
+
+```

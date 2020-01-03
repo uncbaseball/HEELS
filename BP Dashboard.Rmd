@@ -1,0 +1,52 @@
+---
+title: "BP"
+author: "Micah Daley-Harris"
+date: "8/21/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_knit$set(root.dir = "/Users/micahdaley-harris/Desktop/chillmedia")
+
+slide.trackman.columns <- function(data){
+  if(grepl("/", data[1,1]) | names(data)[1] == "row.names"){
+    data[,c(2:ncol(data))] <- data[,c(1:(ncol(data) - 1))]
+    data[,1] <- c(1:nrow(data))
+  }
+  return(data[,which(names(data) != "row.names")])
+}
+
+
+source("/Users/micahdaley-harris/Desktop/chillmedia/GenerateBPBreakdown.R")
+
+```
+
+```{r refresh, include=F}
+url = "http://152.19.152.25/trackman.online.baseball/ExportResponsePage.aspx?ApplicationType=BattingPractice&useExt=False&gameId=328d24fa-635b-11e8-add3-484d7efbbbf7"
+data <- read.csv(paste0(tar.path, "/TAR Database/BP 5.25.18.csv"), stringsAsFactors = F)#textConnection(RCurl::getURL(url)))
+data <- slide.trackman.columns(data)
+
+data <- data[which(data$Batter == data$Batter[nrow(data)]),]
+
+```
+
+
+
+```{r spray, message=F}
+
+# ext: 23.5 +/- 8.5 ft
+setwd("/Users/micahdaley-harris/Desktop/chillmedia/")
+p <- spraychart(data, plot.title = "Spray Chart")
+htmltools::tagList(list(p))
+```
+
+
+
+```{r laev, message=F}
+
+g <- laev.visual.ly(data)
+htmltools::tagList(list(g))
+#g
+```
+

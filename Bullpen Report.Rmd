@@ -1,0 +1,218 @@
+---
+title: "Pitcher Bullpen Report"
+output: html_document
+css: www/style.css
+# params:
+#   pen: value: x
+    
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+knitr::opts_chunk$set(echo = F, warning = F)
+source("global.R")
+time.to.angle <- function(x){
+  sp <- strsplit(x, split = ":")
+  return(lapply(sp, function(x)(as.numeric(x[1]) + as.numeric(x[2]) / 60) * 30))
+}
+#pen <- params$pen
+pen <- read.csv("/Users/micahdaley-harris/Desktop/TAR/TAR Database/rapsodo data.csv", stringsAsFactors = F) #%>%
+  # mutate(BallStrike = ifelse(is.na(is.strike), "", ifelse(is.strike, "Ball", "Strike")),
+  #        Pitch_Type_Ball_Strike = paste(data$TaggedPitchType, data$BallStrike, sep = "-")
+  #        )
+pen$SpinDegrees <- time.to.angle(pen$SpinAxis)
+```
+
+```{r data}
+## velo, movement, location, spin, (grades)
+pen.sd <- crosstalk::SharedData$new(pen, ~PitchNo)
+
+
+```
+
+
+
+```{r loc}
+
+real.strikezone <- read.csv(file = "data/Real Strike Zone.csv", stringsAsFactors = F)
+#applybbexpoutcomes
+
+show.strikezone = T
+show.real.strikezone = T
+shape.type = "pitchtype"
+type = "PlateLoc"
+bside = "Left"
+lefty <- T#mode(game$BatterSide) == "Left"
+p.view = T
+dragmode = "lasso"
+fixaxes = T
+
+pitchtype.shapes <- c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CU" = 17, "BB" = 17)
+
+lhb.pic <- readPNG("data/LHB P View Real Zone.png")#readPNG("data/LHB Catcher View.png")
+rhb.pic <- readPNG("data/RHB P View Real Zone.png")#readPNG("data/RHB Catcher View.png")
+
+
+other.real.strikezone <- real.strikezone[which(real.strikezone$BatterSide != bside), c("PlateLocSide", "PlateLocHeight")]
+real.strikezone <- real.strikezone[which(real.strikezone$BatterSide == bside), c("PlateLocSide", "PlateLocHeight")]
+
+  gg <- ggplot(pen.sd, aes(PlateLocSide, PlateLocHeight)) +
+    geom_point(aes(colour = factor(TaggedPitchType), shape = factor(TaggedPitchType))) +    
+    scale_x_continuous(limits = c(-3, 3), labels = NULL) +
+    scale_y_continuous(limits = c(ifelse(type == "Contact", -2, 0), 5), labels = NULL) +
+    labs(title = "", x = "", y = "", color = "Pitch Type", shape = "")
+  
+  loc.plt <- ggplotly(gg, source = 'loc', tooltip = c()) %>%
+    layout(title = "",
+           xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes), yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = fixaxes),
+           images = list(
+             source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+             xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+             sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+           ), dragmode = dragmode) %>% highlight(on = "plotly_selected", off = "plotly_deselect")
+  
+
+```
+
+```{r mvmnt}
+
+movement.plot <- function(data, remove.undefined = T){
+  per90 <- tibble::tribble(
+    ~PitcherThrows, ~AutoPitchType,    ~RelSpeed,    ~HorzBreak, ~InducedVertBreak,
+    "Left",           "BB", 82.979781325,   14.66555425,      12.607887495,
+    "Left",           "CH",  84.26995735, -6.5539927415,      19.314852645,
+    "Left",           "FB",   91.1247524, -4.3954593557,      22.461836257,
+    "Right",           "BB", 84.315738395, -0.1086137713,      12.131499649,
+    "Right",           "CH",  84.20698938,   19.66848827,       18.06402667,
+    "Right",           "FB", 92.826312234,  16.603804464,      22.461319432,
+    "Left",           "BB",  70.83556362, -0.6410182055,     -10.957964565,
+    "Left",           "CH", 74.768669135, -21.158667225,      0.9299778005,
+    "Left",           "FB",  85.20353539, -17.705232998,      8.9347865799,
+    "Right",           "BB", 73.067942162,  -15.71018453,     -10.235367435,
+    "Right",           "CH",  75.97462283,   6.167286297,      -0.761111762,
+    "Right",           "FB",  85.89435062,   2.897173184,       8.244466326
+  )
+  per90$Max <- rep(c(T, F), each = 6)
+  lefty <- mode(data$PitcherThrows) == "Left"
+  per90 <- per90[which(per90$PitcherThrows == ifelse(lefty, "Left", "Right")),]
+  if(remove.undefined)data <- data[which(data$TaggedPitchType != "Undefined"),]
+  g <- ggplot(data, aes(HorzBreak, InducedVertBreak, color = TaggedPitchType,
+                        text = paste("Pitch =", TaggedPitchType,
+                                     "<br>Velo =", round(RelSpeed),
+                                     "<br>Horz Mvmnt =", round(HorzBreak, digits = 1),
+                                     "<br>Vert Mvmnt =", round(InducedVertBreak, digits = 1)))) +
+    geom_point() +
+    #geom_text(aes(x = per90$HorzBreak, y = per90$InducedVertBreak, label = per90$AutoPitchType)) +
+    scale_x_continuous(limits = c(-25, 25)) +
+    scale_y_continuous(limits = c(-25, 25)) +
+    labs(x = "Horizontal Movement (Pitcher View in inches)", y = "Vertical Movement (in inches)", title = "Pitch Movement", color = "Pitch Type")
+  gg <- ggplotly(g, tooltip = "text", source = 'mvmnt') #%>% 
+    #add_text(x = per90$HorzBreak, y = per90$InducedVertBreak, name = "Elite", text = per90$AutoPitchType, textfont = list(color = "pink")) #%>%
+    #add_text(x = ~c(-25, 0, 25, 0), y = ~c(0, -25, 0, 25), text = c(ifelse(lefty, "Run", "Cut"), "Sink", ifelse(!lefty, "Run", "Cut"), "Ride"), showlegend = F, hoverinfo = "none") 
+  return(gg)
+}
+
+
+
+
+
+
+mov.plt <- movement.plot(pen.sd, remove.undefined = F) %>% 
+  highlight(on = c("plotly_selected"), off = "plotly_deselect")
+
+```
+
+```{r velo}
+#plot_ly(data = pen, y = ~RelSpeed, type = "box", boxpoints = "all", color = ~TaggedPitchType)
+velo.plt <- plot_ly(data = pen.sd, x = ~PitchNo, y = ~RelSpeed, color = ~TaggedPitchType, type = "scatter", mode = "lines+markers") %>% highlight(on = c("plotly_selected"), off = "plotly_deselect")
+
+```
+
+```{r spin}
+## clear selection https://plot.ly/r/click-events/
+spin.plt <- plot_ly(data = pen.sd, r = ~SpinRate, theta = ~SpinDegrees, type = "scatterpolar", mode = "markers", color = ~TaggedPitchType) %>% 
+  layout(dragmode = "lasso", polar = list(angularaxis = list(tickmode = "array", tickvals = seq(0, 330, length.out = 12), ticktext = paste(c(9:12, 1:8), "00", sep = ":")))) %>%
+  highlight(on = c("plotly_selected"), off = "plotly_deselect") #%>%
+  #htmlwidgets::on_render("")
+
+
+```
+
+
+```{r releasepoint, eval=F}
+releasepointgraph.ly <- function(data, pitcher, pside, plot.title = paste(pitcher, "Release Points"), image, xvar = "RelSide", yvar = "RelHeight", meanx, meanz, axistitles = T, ybot = 0, save = F, pitcherview = F){
+  require(png)
+  
+
+  ## filter to non undefined/intent ball, correct pitcher, valid pitch types
+  
+
+  #### Data Summary ####
+  
+
+  xmax <- ifelse(meanx > 0, meanx + 5, meanx + 5) 
+  xmin <- ifelse(meanx > 0, meanx - 3, meanx - 3)
+  
+  
+  ##### Image ####
+  if(missing(image)){
+    imagedir <- paste("data/Release Point Pics/")
+    if(xvar == "Extension"){
+      image <- paste0(imagedir, "/baum extension.png")
+    } else if(paste0(commasplit(pitcher), ".png") %in% dir(imagedir)){
+      image <- paste0(imagedir, commasplit(pitcher), ".png")
+    } else{
+      image <- paste0(imagedir, ifelse(pside == "Left", "/Caden O'Brien.png", "/Tyler Baum.png"))
+      
+    }
+    
+  }
+  
+  
+  if(!is.null(image)){
+    img <- readPNG(image)
+    
+    if(xvar == "Extension"){
+      img.list <- list(source = raster2uri(img), xref = "x", yref = "y", x = meanx - 2, y = 0, sizex = 3.5, sizey = meanz, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below")
+    } else if(pside == "Right"){
+      img.list <- list(source = raster2uri(img), xref = "x", yref = "y", x = meanx, y = 0, sizex = 3.5, sizey = meanz, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below")
+    } else if(pside == "Left"){
+      img.list <- list(source = raster2uri(img), xref = "x", yref = "y", x = meanx - 3.5, y = 0, sizex = 3.5, sizey = meanz, sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below")
+    }
+  } else{
+    img.list <- list()
+  }
+  
+                                                    
+  ####  Plot  ####
+  
+  p <- plot_ly(data = data, x = ~get(xvar), y = ~get(yvar), color = ~BallStrike, colors = c("Ball" = "green", "Strike" = "red"), symbol = ~TaggedPitchType, name = ~Pitch_Type_Ball_Strike, 
+               hoverinfo = "text", text = paste("Pitch:", TaggedPitchType,
+                                                "<br>Pitch #:", PitchNo,
+                                                paste0("<br>", ifelse(xvar == "RelSide", "Release Side", xvar), ":"), round(~get(xvar), digits = 2), "feet",
+                                                "<br>Release Height:", round(RelHeight, digits = 2), "feet")) %>%
+    layout(title = plot.title, xaxis = list(title = ifelse(axistitles, "Horizontal Release Point (ft.)", ""), range = range(c(xmin, xmax)), visible = F), yaxis = list(title = ifelse(axistitles, "Vertical Release Point (ft.)", ""), range = c(ybot, 7), visible = F), images = img.list)
+  
+  
+  return(p)
+
+  
+}
+
+  meanx <- mean(data[which(data$Ind %in% c(1, ifelse(ball.strike, 0, 2))), xvar], na.rm = T) 
+
+
+  
+  
+
+
+```
+
+
+```{r crosstalk}
+options(persist = F)
+crosstalk::bscols(widths = c(6, 6), mov.plt, velo.plt, loc.plt, spin.plt)
+#vembedr::embed_url("https://drive.google.com/file/d/1XZxmUu_fhzB5_4lIULbSc14PWf7VOr6c/view")
+```
+
+

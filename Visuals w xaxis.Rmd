@@ -1,0 +1,160 @@
+---
+title: "Visuals w X-axis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F)
+```
+
+
+```{r, include = FALSE}
+library(plotly)
+```
+
+
+```{r}
+TM <- read.csv(file = "data/uncall.csv", header=TRUE, sep=",") %>% filter(Pitcher == "Sandy, Will")
+x <- TM$yyyymmdd
+df <- data.frame(x, y1 = TM$RelSpeed, y2 = TM$RelSide, y3 = TM$RelHeight, y4 = TM$HorzBreak, y5 = TM$InducedVertBreak, TaggedPitchType = TM$TaggedPitchType)
+
+p <- plot_ly(df, x = ~x) %>%
+  add_boxplot(y = ~y1, name = "A", boxpoints = "all", color = ~TaggedPitchType) %>%
+  add_boxplot(y = ~y2, name = "B", visible = F, boxpoints = "all", color = ~TaggedPitchType) %>%
+  add_boxplot(y = ~y3, name = "C", visible = F, boxpoints = "all", color = ~TaggedPitchType) %>%
+  add_boxplot(y = ~y4, name = "D", visible = F, boxpoints = "all", color = ~TaggedPitchType) %>%
+  add_boxplot(y = ~y5, name = "E", visible = F, boxpoints = "all", color = ~TaggedPitchType) %>%
+  layout(
+    title = "Stats Over Time",
+    xaxis = list(domain = c(0.1, 1), title = "Date"),
+    yaxis = list(title = "y"),
+    updatemenus = list(
+      
+
+      list(
+        y = 0.7,
+        buttons = list(
+          list(method = "restyle",
+               args = list("visible", list(TRUE, FALSE, FALSE, FALSE, FALSE)),
+               label = "Release Speed"),
+
+          list(method = "restyle",
+               args = list("visible", list(FALSE, TRUE, FALSE, FALSE, FALSE)),
+               label = "Release Side"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, TRUE, FALSE, FALSE)),
+               label = "Release Height"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, TRUE, FALSE)),
+               label = "Horizontal Break"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, FALSE,TRUE)),
+               label = "Induced Vertical Break ")))
+      
+    )
+  )
+p
+
+```
+
+```{r}
+
+#TM <- read.csv(file="~/Desktop/UNC2019TrackMan.csv", header=TRUE, sep=",")
+x <- TM$Inning
+df <- data.frame(x, y1 = TM$RelSpeed, y2 = TM$RelSide, y3 = TM$RelHeight, y4 = TM$HorzBreak, y5 = TM$InducedVertBreak )
+
+p <- plot_ly(df, x = ~x) %>%
+  add_boxplot(y = ~y1, name = "A", boxpoints = "all") %>%
+  add_boxplot(y = ~y2, name = "B", visible = F, boxpoints = "all") %>%
+  add_boxplot(y = ~y3, name = "C", visible = F, boxpoints = "all") %>%
+  add_boxplot(y = ~y4, name = "D", visible = F, boxpoints = "all") %>%
+  add_boxplot(y = ~y5, name = "E", visible = F, boxpoints = "all") %>%
+  layout(
+    title = "Stats Over Time",
+    xaxis = list(domain = c(0.1, 1), title = "Inning"),
+    yaxis = list(title = "y"),
+    updatemenus = list(
+    
+
+      list(
+        y = 0.7,
+        buttons = list(
+          list(method = "restyle",
+               args = list("visible", list(TRUE, FALSE, FALSE, FALSE, FALSE)),
+               label = "Release Speed"),
+
+          list(method = "restyle",
+               args = list("visible", list(FALSE, TRUE, FALSE, FALSE, FALSE)),
+               label = "Release Side"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, TRUE, FALSE, FALSE)),
+               label = "Release Height"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, TRUE, FALSE)),
+               label = "Horizontal Break"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, FALSE,TRUE)),
+               label = "Induced Vertical Break ")))
+      
+    )
+  )
+p
+```
+
+
+
+```{r}
+
+
+#TM <- read.csv(file="~/Desktop/UNC2019TrackMan.csv", header=TRUE, sep=",")
+x <- TM$PitchNo
+df <- data.frame(x, y1 = TM$RelSpeed, y2 = TM$RelSide, y3 = TM$RelHeight, y4 = TM$HorzBreak, y5 = TM$InducedVertBreak, TaggedPitchType = TM$TaggedPitchType)
+
+p <- plot_ly(df, x = ~x) %>% #, color = ~TaggedPitchType
+  add_markers(y = ~y1, name = "A") %>%
+  add_markers(y = ~y2, name = "B", visible = F) %>%
+  add_markers(y = ~y3, name = "C", visible = F) %>%
+  add_markers(y = ~y4, name = "D", visible = F) %>%
+  add_markers(y = ~y5, name = "E", visible = F) %>%
+  layout(
+    title = "Stats Over Time",
+    xaxis = list(domain = c(0.1, 1), title = "Pitch Count"),
+    yaxis = list(title = "y"),
+    updatemenus = list(
+     
+
+      list(
+        y = 0.7,
+        buttons = list(
+          list(method = "restyle",
+               args = list("visible", list(TRUE, FALSE, FALSE, FALSE, FALSE)),
+               label = "Release Speed"),
+
+          list(method = "restyle",
+               args = list("visible", list(FALSE, TRUE, FALSE, FALSE, FALSE)),
+               label = "Release Side"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, TRUE, FALSE, FALSE)),
+               label = "Release Height"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, TRUE, FALSE)),
+               label = "Horizontal Break"),
+          
+          list(method = "restyle",
+               args = list("visible", list(FALSE, FALSE, FALSE, FALSE,TRUE)),
+               label = "Induced Vertical Break ")))
+      
+    )
+  )
+p
+
+
+```

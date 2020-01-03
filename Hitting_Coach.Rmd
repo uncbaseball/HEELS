@@ -1,0 +1,212 @@
+---
+title: "Hitting Coach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+require(dplyr)
+require(tidyr)
+require(magrittr)
+require(DT)
+default::default(datatable) <- list(filter = "top")
+psplit <- function(x) strsplit(x = x, split = ", ")[[1]][1]
+
+```
+
+
+<style>
+body {
+  background-image: url('www/Bosh CF View.jpeg');
+  box-shadow: inset 0 0 0 1000px rgba(255,255,255,.7);
+  margin: 0; 
+}
+
+h1 {
+  color: blue;
+  text-align: center;
+}
+
+h2 {
+  color: hotpink;
+  text-align: center;
+}
+</style>
+
+```{r}
+htmltools::tags$button(style = "background-color: green;", htmltools::tags$a(href = "../hitters.html", "Choose a Hitter's Page", style = "size: 36px; color: white;"))
+htmltools::tags$button(style = "background-color: blue;", htmltools::tags$a(href = "../hitters2019.html", "2019 Only Hitter Pages", style = "size: 36px; color: white;"))
+```
+
+### Exit Velo for UNC and Opponents by Game
+```{r}
+datatable(read.csv(file = "data/UNC vs. Opp Avg Exit Velo by Game.csv", stringsAsFactors = F), rownames = F,
+          colnames = c("Game", "UNC Avg Exit Velo", "Opponent Avg Exit Velo"))
+```
+
+
+
+```{r}
+data9 <- read.csv(file= "data/uncall.csv", stringsAsFactors = F)
+batter.data <- data9 %>% filter(BatterTeam == "NOR_TAR" & PitchCall != "Undefined") %>% mutate(This_Week = yyyymmdd > (Sys.Date() - 7))
+summarise_hitter_data <- function(x){
+  x %>% summarise(`Pitches Seen` = n(),
+                  `Hot Cold Points` = sum(HotColdPoints, na.rm = T),
+                  `Hard Contact` = sum(Good_Contact, na.rm = T),
+                  `Hot Zone Takes` = sum(HitterHotColdPM == "Hot Zone Take", na.rm = T),
+                  `Chases` = sum(HitterHotColdPM == "Chase", na.rm = T),
+                  `Cold Zone Swings` = sum(HitterHotColdPM == "Cold Zone Swing", na.rm = T), 
+                  `Balls Put In Play` = sum(InPlay, na.rm = T),
+                  # `Popups` = sum(!is.na(ContactType) & ContactType == "Under" | (is.na(ContactType) & PlayResult %in% c("Out", "Sacrifice") & HitType %in% c("PopUp", "FlyBall"))),
+                  `Pull Side Popups` = sum(!is.na(Bearing) & ContactType == "Under" & (BatterSide == "Left" & Bearing > 0 | BatterSide == "Right" & Bearing < 0)),
+                  `Back Side Rollovers` = sum(!is.na(Bearing) & ContactType == "Topped" & (BatterSide == "Left" & Bearing < 0 | BatterSide == "Right" & Bearing > 0)),
+                  
+                  `Back Side Popups` = sum(!is.na(Bearing) & ContactType == "Under" & (BatterSide == "Left" & Bearing < 0 | BatterSide == "Right" & Bearing > 0)),
+                  # Rollovers = sum(!is.na(ContactType) & ContactType == "Topped" | (is.na(ContactType) & PlayResult %in% c("Out", "FieldersChoice") & HitType == "GroundBall")),
+                  `Pull Side Rollovers` = sum(!is.na(Bearing) & ContactType == "Topped" & (BatterSide == "Left" & Bearing > 0 | BatterSide == "Right" & Bearing < 0))
+  )
+
+}
+
+absummaries <- function(singlegame = F){
+  ag <-  data9 %>% filter(BatterTeam == "NOR_TAR" & PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay") & if(singlegame) yyyymmdd == max(data9$yyyymmdd) else yyyymmdd > "2019-03-22") %>%
+          mutate(HitterHotColdPM = ifelse(Strikes == 2, ifelse(PitchCall == "StrikeCalled", "Strikeout Looking", ifelse(PitchCall == "StrikeSwinging", "Strikeout Swinging", gsub(HitterHotColdPM, pattern = "Strikeout/", fixed = T, replacement = ""))),
+                                          ifelse(PitchCall == "InPlay", paste(HitterHotColdPM, "- In Play"), HitterHotColdPM)),
+                 `Exit Velo/Angle` = ifelse(PitchCall == "InPlay", ifelse(is.na(ExitSpeed), "No TM Data", paste0(round(ExitSpeed), "mph/", round(Angle), "˚")),""),
+                 `Contact Quality` = ifelse(PitchCall == "InPlay", ifelse(is.na(ContactType), "No TM Data", ContactType), "")) %>%
+          select(Batter, Game, Times_In_The_Box, Strikes, HitterHotColdPM, AB_Result, `Contact Quality`, `Exit Velo/Angle`)
+
+  k2.fouls <- ag %>% group_by(Batter, Game, Times_In_The_Box) %>%
+    summarise("Two Strike Fouls" = sum(Strikes == 2 & HitterHotColdPM == "Foul"), `Contact Quality` = paste0(`Contact Quality`, collapse = ""), `Exit Velo/Angle` = paste0(`Exit Velo/Angle`, collapse = ""))
+  
+  ag %<>% select(-`Exit Velo/Angle`) %>% select(-`Contact Quality`) %>% filter(!(Strikes == 2 & HitterHotColdPM == "Foul")) %>% spread(Strikes, HitterHotColdPM) 
+  
+  names(ag) <- c("Batter", "Game", "At-Bat", "Result", "Strike 1", "Strike 2", "Strike 3")
+  
+  ag2 <- left_join(ag, k2.fouls, by = c("Batter", "Game", "At-Bat" = "Times_In_The_Box"))
+  
+  ag2 <- ag2[,c(1:4, 9:10, 5:8)]
+  
+  ag2$`Contact Quality` <- gsub(ag2$`Contact Quality`, pattern = "F&B", replacement = "Flare/Burner", fixed = T)
+  
+  if(singlegame) ag2 %<>% select(-Game)
+  
+  datatable(ag2) %>%
+    formatStyle('Contact Quality', backgroundColor = styleEqual(c("Barrel", "Solid", "Flare/Burner", "Weak", "Under", "Topped"), c("green", "green", "green", "red", "red", "red"))) %>%
+    
+    formatStyle(c('Strike 1', 'Strike 2', 'Strike 3'),
+                backgroundColor = styleEqual(c("Hot Zone Take", "Chase - In Play", "Chase", "Cold Zone Swing - In Play", 
+                                               "Cold Zone Swing", "Strikeout Swinging", "Weak Contact", "Strikeout Looking",
+                                               "Cold Zone Take", "Hot Zone Swing", "Hot Zone Swing - In Play", "Solid Contact", "Reached Base"), 
+                                             c(rep("red", 8), rep("green", 5)))
+                )
+  }
+
+
+
+```
+
+##  Last Game At-Bat Summaries
+
+```{r}
+absummaries(T)
+
+```
+
+
+##  All Games At-Bat Summaries
+```{r}
+absummaries(F)
+
+```
+
+
+## Less than 2 strikes
+```{r}
+lt2k <- batter.data %>% filter(Strikes < 2) %>% group_by(Batter) %>%
+  summarise_hitter_data()
+datatable(lt2k, rownames = F)
+
+```
+
+```{r eval=T}
+percent <- function(x, digits = 0) round(100 * x, digits = digits)
+
+ag <- batter.data %>% filter(Strikes < 2) %>% group_by(Batter) %>% 
+  summarise("GoodSwing%" = percent(sum(HitterHotColdPM == "Hot Zone Swing", na.rm = T) / sum(HitterHotColdPM %in% c("Hot Zone Swing", "Cold Zone Swing", "Chase"), na.rm = T)),
+            "GoodTake%" = percent(sum(HitterHotColdPM %in% c("Ball Take", "Cold Zone Take"), na.rm = T) / sum(HitterHotColdPM %in% c("Ball Take", "Cold Zone Take", "Hot Zone Take"), na.rm = T)))
+
+plot(ag$`GoodSwing%`, ag$`GoodTake%`, type = "n", main = "Good Swings/Good Takes",
+     xlab = "How Many Swings Were on Good Pitches to Hit (%)", ylab = "How Many Takes Were Good Takes (%)")
+text(ag$`GoodSwing%`, ag$`GoodTake%`, labels = sapply(ag$Batter, psplit))
+
+
+plot(lt2k$`Back Side Popups`, lt2k$`Pull Side Rollovers`, type = "n", main = "Bad Misses",
+     xlab = "Back Side Popups", ylab = "Pull Side Rollovers")
+abline(a = 0, b = 1)
+text(lt2k$`Back Side Popups`, lt2k$`Pull Side Rollovers`, labels = sapply(lt2k$Batter, psplit))
+
+plot(lt2k$`Back Side Rollovers`, lt2k$`Pull Side Popups`, type = "n", main = "Good Misses",
+     xlab = "Back Side Rollovers", ylab = "Pull Side Popups")
+abline(a = 0, b = 1)
+text(lt2k$`Back Side Rollovers`, lt2k$`Pull Side Popups`, labels = sapply(lt2k$Batter, psplit))
+
+
+```
+
+
+##  2 Strikes
+```{r}
+datatable(batter.data %>% filter(Strikes == 2) %>% group_by(Batter) %>%
+                summarise(`Hot Cold Points` = sum(HotColdPoints, na.rm = T),
+                          `Hard Contact` = sum(Good_Contact, na.rm = T),
+                          `Pitches Per AB` = round(n() / length(unique(PlayID)), digits = 1),
+                          `Ks Looking` = sum(PitchCall == "StrikeCalled", na.rm = T),
+                          `Bad Calls` = sum(PitchCall == "StrikeCalled" & Exp.Called.Strike < 0.45, na.rm = T),
+                          `Ks Swinging` = sum(PitchCall == "StrikeSwinging", na.rm = T),
+                          `Chases` = sum(PitchCall == "StrikeSwinging" & Exp.Called.Strike < 0.3, na.rm = T),
+                          `Fouled off Ball` = sum(PitchCall == "FoulBall" & Exp.Called.Strike < 0.35, na.rm = T)), rownames = F)
+```
+
+##  Velo
+```{r}
+datatable(batter.data %>% filter(Strikes < 2 & RelSpeed > 91) %>% mutate(This_Week = yyyymmdd > (Sys.Date() - 7)) %>% group_by(Batter) %>%
+  summarise_hitter_data(), rownames = F)
+```
+
+##  Off-Speed
+```{r}
+datatable(batter.data %>% filter(Strikes < 2 & TaggedPitchType != "FB") %>% mutate(This_Week = yyyymmdd > (Sys.Date() - 7)) %>% group_by(Batter) %>%
+  summarise_hitter_data(), rownames = F)
+```
+
+
+## vs. LHP
+```{r}
+datatable(batter.data %>% filter(Strikes < 2 & PitcherThrows == "Left") %>% mutate(This_Week = yyyymmdd > (Sys.Date() - 7)) %>% group_by(Batter) %>%
+  summarise_hitter_data(), rownames = F)
+```
+
+## vs. RHP
+```{r}
+datatable(batter.data %>% filter(Strikes < 2 & PitcherThrows == "Right") %>% mutate(This_Week = yyyymmdd > (Sys.Date() - 7)) %>% group_by(Batter) %>%
+  summarise_hitter_data(), rownames = F)
+
+```
+
+## Pitch Framing
+
+```{r}
+data9 %>% filter(PitchCall %in% c("StrikeCalled", "BallCalled")) %>%
+  group_by(Game, PitcherTeam) %>%
+  summarise(`Strikes Added` = sum(PitchCall == "StrikeCalled" & Exp.Called.Strike < 0.6, na.rm = T) - sum(PitchCall == "BallCalled" & Exp.Called.Strike > 0.4, na.rm = T)) %>%
+  mutate(PitcherTeam = ifelse(PitcherTeam == "NOR_TAR", "UNC", "Opponent")) %>%
+  spread(PitcherTeam, `Strikes Added`) %>%
+  select(Game, UNC, Opponent) %>%
+  mutate(`Link to Chart` = paste0("<a href = '", "https://micahdh.github.io/Catchers/", gsub(Game, pattern = "/", replacement = "-"), ".pdf'>Click Here</a>")) %>%
+  datatable(escape = F)
+
+```
+
+
+

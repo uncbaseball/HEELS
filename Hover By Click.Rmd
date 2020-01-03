@@ -1,0 +1,67 @@
+---
+title: "Hover by Click"
+author: "Micah Daley-Harris"
+date: "3/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(magrittr)
+require(plotly)
+require(htmlwidgets)
+```
+
+
+```{r cars}
+
+htmltools::div(id = "myDiv",
+plot_ly(data = iris, x = ~Sepal.Length, y = ~Petal.Length, hovertext = ~Species, name = "A") %>% add_markers() %>% layout(hovermode = "closest", dragmode = F) %>%
+  onRender("
+function(el, x) {
+  el.on('plotly_click', function(data){
+    hoverInfo = document.getElementById('hoverinfo');
+    var pts = data.points[0].hovertext + '.mp4';
+    hoverInfo.innerHTML = pts
+  });
+}")
+)
+
+htmltools::div(id = "theDiv")
+htmltools::div(id = "hoverinfo", "my old text")
+
+```
+
+
+<script>
+var myPlot = document.getElementById('myDiv'),
+    hoverInfo = document.getElementById('hoverinfo'),
+    d3 = Plotly.d3,
+    N = 16,
+    x = d3.range(N),
+    y1 = d3.range(N).map( d3.random.normal() ),
+    y2 = d3.range(N).map( d3.random.normal() ),
+    data = [ { x:x, y:y1, type:'scatter', name:'Trial 1',
+        mode:'markers', marker:{size:16} },
+        { x:x, y:y2, type:'scatter', name:'Trial 2',
+        mode:'markers', marker:{size:16} } ];
+    layout = { 
+        hovermode:'closest',
+        title:'Hover on Points'
+     };
+
+Plotly.plot('theDiv', data, layout, {showSendToCloud: true});
+
+myPlot.on('plotly_hover', function(data){
+    var infotext = data.points.map(function(d){
+      return (d.data.name+': x= '+d.x+', y= '+d.y.toPrecision(3));
+    });
+  
+    hoverInfo.innerHTML = infotext.join('<br/>');
+})
+ .on('plotly_unhover', function(data){
+    hoverInfo.innerHTML = '';
+});
+
+</script>
+

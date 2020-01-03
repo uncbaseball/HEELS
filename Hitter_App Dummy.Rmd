@@ -1,0 +1,872 @@
+---
+output: html_document
+# params:
+#   data:
+#     value: x
+#   batter:
+#     value: x
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F)
+require(crosstalk)
+require(htmlwidgets)
+require(plotly)
+require(htmltools)
+
+source("global.R")
+
+video.on.click <- "
+function(el, x) {
+  el.on('plotly_click', function(data){
+    var pts = 'https://s3.amazonaws.com/publicuncsynergyvideo/' + data.points[0].customdata.substring(0, 11) + '/' + data.points[0].customdata + '.mp4';
+    window.open(pts, '_blank');
+  });
+}
+"
+
+video.and.hover.on.lasso <- "
+function(el, x) {
+  el.on('plotly_selecting', function(data){
+    hoverInfo = document.getElementById('hoverinfo');
+    hoverInfo.innerHTML = '';
+    var pts = data.points[0].hovertext;
+    hoverInfo.innerHTML = pts;
+
+    tvfeed = document.getElementById('tvfeed');
+    var videolink = 'https://s3.amazonaws.com/publicuncsynergyvideo/' + data.points[0].customdata.substring(0, 12) + '/' + data.points[0].customdata + '.mp4';
+    
+    tvfeed.href = videolink;
+
+    highspeed = document.getElementById('highspeed');
+    var highspeedlink = 'https://s3.amazonaws.com/unchitterhighspeedvideo/' + data.points[0].customdata.substring(0, 12) + '_' + cameraside + '/' + data.points[0].customdata + '.mp4';
+    highspeed.href = highspeedlink;
+  });
+}"
+
+margin0 <- list(pad = 0, l = 0, r = 0, b = 0, t = 0)
+
+gls <- read.csv(file = "data/Batter Targets.csv", stringsAsFactors = F) %>% filter(stat != "Home Run")
+
+toOrdinals <- function(numbers){
+  ords <- c()
+  for(i in numbers) ords <- c(ords, toOrdinal::toOrdinal(i))
+  ords
+}
+
+
+videodropdown <- function(x, pitcher = F, in.app = F){
+  usa <- function(x) unlist(strsplit(as.character(x), split = "\n"))
+  linklegal <- function(x) gsub(x, pattern = "/| | - |\\(|\\)|&|,", replacement = "_")
+  tags <- htmltools::tags
+  
+  player <- unique(x$Player)
+  assert_that(length(player) == 1)
+  
+  
+  
+  doc <- 
+    tags$body(
+      tags$div(class="container",
+                 
+               tags$h2(paste(player, "Video")),
+               tags$button(class = "btn-warning", tags$a("Back to App", href = paste0(player, ".html"))),
+               tags$p("Click on the Game / At-Bat / Pitch you want to watch"),
+               tags$br(),
+               tags$p("MISSING: Miami and Gardner-Webb High Speed, and High Speed Before UMass-Lowell"),
+               tags$div(class="panel-group",
+                        tags$div(class="panel panel-default")
+               )
+      )
+    )
+  
+  thehtml <-
+    c("<html>",
+    "<head>",
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css\">",
+    "<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>",
+    "<script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js\"></script>",
+    "</head>",
+    usa(doc))
+  
+  tailhtml <- c(tail(thehtml, 3), "</html>")
+  thehtml <- head(thehtml, -3)
+  thehtml[length(thehtml)] <- str_sub(thehtml[length(thehtml)], 1, -7)
+  
+  if(in.app){
+    everything <-       usa(tags$div(class="container",
+
+                              tags$h2(paste(player, "Video")),
+                              tags$button(class = "btn-warning", tags$a("Back to App", href = paste0(player, ".html"))),
+                              tags$p("Click on the Game / At-Bat / Pitch you want to watch"),
+                              tags$br(),
+                              tags$p("MISSING: Miami and Gardner-Webb High Speed, and High Speed Before UMass-Lowell"),
+                              tags$div(class="panel-group",
+                                       tags$div(class="panel panel-default")
+                              )
+    ))
+    thehtml <- head(everything, -3)
+    tailhtml <- tail(everything, 3)
+    
+  }
+
+  for(game in unique(x$Game)){
+    thehtml <- c(thehtml, 
+                 usa(tags$div(class="panel-heading",
+                            tags$h4(class="panel-title",
+                                    tags$a("data-toggle"="collapse", href=linklegal(paste0("#", game)), game)
+                            )
+                    )),
+                 paste0("<div id=\"", linklegal(game), "\" class=\"panel-collapse collapse\">")
+                 #tags$div(id=paste(game, sep = "_"), class="panel-collapse collapse",
+                 )
+    for(ab_string in unique(x %>% filter(Game == game) %>% select(ab_string))[,1]){   
+      thehtml <- c(thehtml,
+                          usa(
+                            tags$div(class="panel-heading",
+                                     tags$h4(class="panel-title",
+                                             tags$a("data-toggle"="collapse", href=linklegal(paste0("#", game, "_", ab_string)), ab_string)
+                                     )
+                            )
+                          ),
+                    paste0("<div id=\"", linklegal(paste0(game, "_", ab_string)), "\" class=\"panel-collapse collapse\">")
+                  )
+                            #tags$div(id=paste(game, ab_string, sep = "_"), class="panel-collapse collapse",
+                                     for(row in which(x$Game == game & x$ab_string == ab_string)){
+                                       video_link <- x[row, "video_link"]
+                                       pitch_string <- x[row, "pitch_string"]
+                                       if(pitcher){
+                                         thehtml <- c(thehtml,      
+                                                      usa(tags$button(class="btn btn-info", style="display:block;", tags$a(href=x[row, "TV_video_link"], paste("TV:", pitch_string)))),
+                                                      usa(tags$button(class="btn btn-warning", style="display:block;", tags$a(href=x[row, "Side_video_link"], paste("Side Slo-Mo:", pitch_string)))),
+                                                      usa(tags$button(class="btn btn-warning", style="display:block;", tags$a(href=x[row, "Front_video_link"], paste("Front Slo-Mo:", pitch_string))))
+                                         )
+                                       } else{
+                                         thehtml <- c(thehtml,      
+                                                      usa(tags$button(class="btn btn-info", style="display:block;", tags$a(href=x[row, "TV_video_link"], paste("TV:", pitch_string)))),
+                                                      usa(tags$button(class="btn btn-warning", style="display:block;", tags$a(href=x[row, "HS_video_link"], paste("Slo-Mo:", pitch_string))))
+                                         )
+                                       }
+
+                                      }
+      thehtml <- c(thehtml, "</div>")
+    }
+    thehtml <- c(thehtml, "</div>")
+  }
+  
+  if(in.app){
+    return(c(thehtml, tailhtml))
+  } else{
+    write(c(thehtml, tailhtml), file = gsub(paste(player, "Video Dropdown.html"), pattern = "  ", replacement = " "))
+  }
+  
+
+}
+
+
+```
+
+```{r include=F}
+params <- list(batter = "Busch, Michael")
+params$data <- read.csv(file = "data/uncall.csv") %>%
+  filter(!is.element(PitchCall, c("Undefined", "Warmup")) & Batter == params$batter)# %>%
+  #filter(GameID %startswith% "UNCNOD041319")
+
+```
+
+---
+title: `r params$batter`
+---
+
+```{r viewport, results='asis'}
+cat(c('<meta name="viewport" content="width=device-width, initial-scale=1">',
+      '<meta name="viewport" content="height=device-height, initial-scale=1">'))
+
+```
+
+<style>
+html{
+  margin: 0; 
+  height: 100%; 
+  
+}
+
+body {
+  background-image: url('www/Bosh CF View.jpeg');
+  box-shadow: inset 0 0 0 1000px rgba(255,255,255,.4);
+}
+
+p {
+  font-weight: bold;
+  font-size: 1em;
+  background-color: white;
+}
+
+.visual {
+  width: 95%;
+  height: 55%;
+  top: 15vh;
+}
+
+.filters {
+  width: 90%;
+  right: 0px;
+  height: 10vh;
+}
+
+.noshow2start{
+  display: none;
+}
+
+#showfilters {
+  width: 100%;
+}
+
+#changevisual {
+  background-color: lightblue;
+  border: 4px solid black;
+}
+
+#showhotcold {
+  width: 25%;
+  height: 15%;
+  right: 0px;
+  border: solid;
+  border-width: 4px 4px 0px 0;
+  border-color: black;
+}
+
+#showvideo {
+  width: 25%;
+  height: 15%;
+  right: 0px;
+  border: solid;
+  border-width: 4px 4px 0px 0;
+  border-color: black;
+}
+
+
+footer {
+  bottom: 25px;
+  display: inline-block;
+  position: fixed;
+  z-index: 5;
+  width: 100%;
+  height: 5%;
+}
+
+
+
+
+#game{
+  width: 37%;
+  display: inline-block;
+  color: blue;
+}
+
+#month{
+  width: 22%;
+  display: inline-block;
+  color: blue;
+}
+
+#year{
+  width: 11%;
+  display: inline-block;
+  color: blue;
+}
+
+#scrim{
+  width: 20%;
+  display: inline-block;
+  color: blue;
+}
+
+#atbat{
+  width: 5%;
+  display: inline-block;
+  color: blue;
+}
+
+
+#pitches, #counts{
+  width: 20%;
+  display: inline-block;
+  color: black;
+  size: 1.5em;
+}
+
+#phand{
+  width: 25%;
+  display: inline-block;
+  color: black;
+}
+
+#pitchresult{
+  width: 30%;
+  color: black;
+  display: inline-block;
+}
+
+#contactresult{
+  width: 30%;
+  display: inline-block;
+  color: hotpink;
+}
+
+#contactquality{
+  width: 25%;
+  display: inline-block;
+  color: hotpink;
+}
+
+#hotcold{
+  width: 35%;
+  display: inline-block;
+  color: hotpink;
+}
+
+
+#hoverinfo{
+  background-color: white;
+  width: 85%;
+  position: relative;
+  display: block;
+  z-index: 3 !important;
+}
+
+
+.legend{
+  left: 50%;
+  width: 40%;
+  display: inline;
+  bottom: 14%;
+  position: fixed;
+  z-index: 3;
+  padding-top: 10%;
+}
+
+#videobuttons{
+  padding-top: 0px !important;
+  z-index: 4;
+  position: fixed;
+  bottom: 10%;
+}
+
+
+
+@media only screen and (min-width: 800px) {
+  footer {
+    display: none;
+  }
+  #hoverinfo {
+    display: none;
+  }
+  .legend {
+    position: static;
+    height: 25%;
+    width: 30%;
+  }
+  .legend img {
+    width: 30% !important;
+  }
+  .legend button {
+    width: 20%;
+  }
+  
+  #videobuttons{
+    bottom: 0px !important;
+    position: fixed !important;
+    width: 60%;
+  }
+  
+} 
+
+</style>
+
+<script>
+
+  function hideeverything(){
+    var a = document.getElementById("stats1");
+    var a2 = document.getElementById("stats2");
+    var b = document.getElementById("locations");
+    var c = document.getElementById("spray");
+    var x = document.getElementById("laev");
+    var y = document.getElementById("contacttype");
+    var z = document.getElementById("battedballtype");
+    a.style.display = "none";
+    a2.style.display = "none";
+    b.style.display = "none";
+    c.style.display = "none";
+    x.style.display = "none";
+    y.style.display = "none";
+    z.style.display = "none";
+    document.getElementById("videodrops").style.display = "none";
+    document.getElementById("locslegend").style.display = "none";
+    document.getElementById("countshist").style.display = "none";
+    document.getElementById("pitcheshist").style.display = "none";
+    
+    
+  }
+  
+
+
+  function showstats(){
+    hideeverything();
+    document.getElementById("stats1").style.display = "block";
+    showavgsbtns();
+  }
+  
+  function showstats2(){
+    hideeverything();
+    document.getElementById("stats2").style.display = "block";
+    showavgsbtns();
+    
+  }
+  
+  function showlocations(){
+    hideeverything();
+    document.getElementById("locations").style.display = "block";
+    document.getElementById("videobuttons").style.display = "block";
+    document.getElementById("hoverinfo").style.display = "block";
+    document.getElementById("locslegend").style.display = "block";
+    
+  }
+  
+
+  function showspray(){
+    hideeverything();
+    document.getElementById("spray").style.display = "block";
+    document.getElementById("videobuttons").style.display = "block";
+    document.getElementById("hoverinfo").style.display = "block";
+
+  }
+  
+  function showlaev(){
+    hideeverything();
+    document.getElementById("laev").style.display = "block";
+    document.getElementById("videobuttons").style.display = "block";
+    document.getElementById("hoverinfo").style.display = "block";
+  }
+  
+  function showcontacttype(){
+    hideeverything();
+    document.getElementById("contacttype").style.display = "block";
+    showavgsbtns();
+  }
+  
+  function showbattedballtype(){
+    hideeverything();
+    document.getElementById("battedballtype").style.display = "block";
+    showavgsbtns();
+  }
+  
+  function expandvideodrop(){
+    hideeverything();
+    document.getElementById("videodrops").style.display = "block";
+    document.getElementById("videobuttons").style.display = "none";
+    document.getElementById("hoverinfo").style.display = "none";
+    
+  }
+  
+  function showavgsbtns(){
+    var a = document.getElementById("avgsbtns");
+    if(a.style.display == "none" | a.classList.contains('noshow2start')){
+      a.style.display = "block";
+      a.classList.remove('noshow2start');
+    } else{
+      a.style.display = "none";
+    }
+    
+  }
+  
+  function startup(){
+    if (document.documentElement.clientWidth < 800) {
+  	  showlocations();
+    }
+  }
+  
+
+</script>
+
+```{r data, include=F}
+
+hotcold <- read.csv(file = "Hitter Hot Cold.csv", stringsAsFactors = F) %>% filter(Batter == params$batter)
+
+data <- params$data %>%
+  mutate(TaggedPitchType = ifelse(TaggedPitchType == "FT", "FB", ifelse(TaggedPitchType == "Undefined", "Unknown", ifelse(TaggedPitchType == "CU", "CB", as.character(TaggedPitchType)))),
+          Pitch_TM_Text = paste("<b>Result:</b>", Pitch_Result, "<br><b>Pitch:</b>", TaggedPitchType, round(RelSpeed), "mph<br><b>Count:</b>", Count, "<br>", Date, toOrdinals(Inning), "Inning"),
+         Hit_TM_Text = paste("<b>Contact Type:</b>", ContactType, "<br><b>Exit Velo:</b>", round(ExitSpeed), "<br><b>Launch Angle:</b>", round(Angle),  "<br><b>Distance:</b>", round(Distance), "<br><b>Result:</b>", PlayResult, "<br>", Date, toOrdinals(Inning), "Inning"))
+
+data[which(data$PitchCall != "InPlay"), c("XLand", "YLand", "XCoord", "YCoord")] <- NA
+
+batterx <- data %>%
+    filter(PitchCall != "Undefined" & Scrimmage == "Season" & BatterTeam == "NOR_TAR" & Batter == params$batter) %>%#as.Date(yyyymmdd) > "2019-02-17" &  #yyyymmdd > "2019-02-17" # GameID == "UMLUNC030219" #  & endsWith(Date, "9")startsWith(BatterTeam, "NOR_TAR")
+    mutate(ab_string = paste(paste("AB", Times_In_The_Box), AB_Result, sep = " - "), pitch_string = paste(paste("Pitch", PitchofPA), Pitch_Result, sep = " - "),
+           HS_video_link = paste0("https://s3.amazonaws.com/unchitterhighspeedvideo/", GameID, paste0("_", substr(BatterSide, 1, 1), "F/") , key, ".mp4"),
+           TV_video_link = paste0("https://s3.amazonaws.com/publicuncsynergyvideo/", GameID, "/", key, ".mp4")
+           ) %>%
+  arrange(desc(yyyymmdd), Inning, PitchofPA) %>%
+  select(Player = Batter, Game, ab_string, pitch_string, HS_video_link, TV_video_link)
+
+lhb <- mode(data$BatterSide) == "Left"
+
+dat <- SharedData$new(data, ~key)
+
+```
+
+
+```{r results='asis'}
+cat(
+  paste(
+    "<script>
+      var cameraside = '", ifelse(lhb, "LF", "RF"), "';
+  </script>", sep = "")
+)
+```
+
+
+```{r bootstrap}
+
+tags$body(onload = "startup();",
+
+bscols(widths = 12,
+    
+          
+      
+    ###############################
+    ####        Filters        ####
+    ###############################
+    
+    ## we can do this same thing to show/hide general recs
+    tags$button("Filters", id = "showfilters", class = "btn-info", "data-toggle" = "collapse", "data-target" = "#filters"),
+    
+    tags$div(id = "filters", class = "collapse",
+        ## Row 1 Game
+       filter_select("game", "Game", dat, ~Game),
+       filter_select("month", "Month", dat, ~Month),
+       filter_select("year", "Year", dat, ~Year),
+       filter_select("scrim", "Game Type", dat, ~Scrimmage, multiple = T),
+       filter_select("atbat", "AB", dat, ~Times_In_The_Box, multiple = T),
+       ## Row 2 Pitch (type, hand, count) (add Balls, Strikes?)
+       filter_select("pitches", "Pitch", dat, ~TaggedPitchType, multiple = T),
+       filter_select("counts", "Count", dat, ~Count, multiple = T),
+       filter_select("phand", "Pitcher Hand", dat, ~PitcherThrows, multiple = T),
+       ## Row 3 Result
+       filter_select("pitchresult", "Pitch Result", dat, ~PitchCall, multiple = T),
+       filter_select("contactresult", "Contact Result", dat, ~PlayResult, multiple = T),
+       filter_select("contactquality", "Well Hit", dat, ~ContactType, multiple = T),
+       filter_select("hotcold", "Hot Zone", dat, ~HitterHotColdPM, multiple = T)
+        # Good Take
+       
+      ),
+       ## can put has video, competition quality, midweek/weekend (use wday)
+       
+     # tags$button("clearbrush", onclick = "scatter.clearBrush();")
+      
+  tags$div(id = "allvisuals",     
+
+  tags$div(class = "row",
+    ########################################
+    ####        Batter Locations        ####
+    ########################################
+    
+    tags$div(id = "locations", class = "col-xs-12 col-md-8",
+       plot_ly(dat, x = ~PlateLocSide_Catcher, y = ~PlateLocHeight, showlegend = F, marker = list(size = 10), customdata = ~key,
+               hovertext = ~Pitch_TM_Text) %>%
+         add_markers(symbol = ~TaggedPitchType, symbols = c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CB" = 17, "BB" = 17), 
+                     color = ~PitchCall, colors = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "InPlay" = "blue", 
+                                                    "BallCalled" = "forestgreen", "BallIntentional" = "forestgreen", "StrikeCalled" = "red", "StrikeSwinging" = "darkred", 
+                                                    "FoulBall" = "darkred", "HitByPitch" = "black",  "Undefined" = 'white', "Sacrifice" = "blue"),
+                     text = ~Pitch_TM_Text, hoverinfo = "text") %>%
+         layout(title = "",
+                xaxis = list(title = '', range = c(-3, 3), visible = F, fixedrange = T), 
+                yaxis = list(title = '', range = c(-0.5, 5), showgrid = F, visible = F, fixedrange = T),
+                images = list(
+                  source = raster2uri(readPNG(paste0("data/", ifelse(lhb, "L", "R"), "HB Real Zone.png"))),
+                  xref = "x", yref = "y",  x = -4, y = -.5, sizex = 8, sizey = 5.5,
+                  sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"), 
+                shapes = list(list(type = "circle", xref = "x", yref = "y", fillcolor = "rgba(255, 0, 0, 0.2)",
+                                   x0 = hotcold$PlateLocSide_Catcher - hotcold$radius, x1 = hotcold$PlateLocSide_Catcher + hotcold$radius,
+                                   y0 = hotcold$PlateLocHeight - hotcold$radius, y1 = hotcold$PlateLocHeight + hotcold$radius)),
+                dragmode = "lasso", 
+                hovermode = "closest",
+                margin = margin0) %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect", opacityDim = 0.1) %>%
+         onRender(video.and.hover.on.lasso)
+       )),
+    
+    tags$div(class = "legend", style = "z-index: 4", id = "locslegend", # needs to be conditional on screen width
+       tags$img(style = "position: relative;", src = "www/Pitch Locations Legend.png", height = "40%", width = "90%")),
+    
+    ########################################
+    ####        Batter Spraychart       ####
+    ########################################
+    # colors = c("Out" = , "Single" = "blue"),
+
+  tags$div(class = "row",
+    tags$div(id = "spray", class = "col-xs-12 col-md-6",
+       plot_ly(data = dat, x = ~XLand, y = ~YLand, marker = list(size = 10), customdata = ~key) %>%
+         # filter(PlayResult != "Undefined") %>% 
+         add_markers(color = ~PlayResult, colors = c("Out" = "grey", "Sacrifice" = "white", "Error" = "black", "Single" = "green", "Double" = "blue", "Triple" = "purple", "HomeRun" = "gold"), hovertext = ~Hit_TM_Text, hoverinfo = "text", showlegend = F) %>%
+         layout(xaxis = list(range = c(-249, 249), visible = F, fixedrange = T), yaxis = list(range = c(0, 456.5), visible = F, fixedrange = T),
+                images = list(
+                  source = raster2uri(readPNG("data/Bosh Overhead Cropped on Home Plate.png")),
+                  xref = "x", yref = "y", x = -249, y = 0, sizex = 249 * 2, sizey = 456.5, 
+                  sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+                ),
+                dragmode = "lasso", margin = margin0) %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect", opacityDim = 0.1) %>%
+         onRender(video.and.hover.on.lasso),
+       tags$div(class = "legend",
+                tags$img(src = "www/Spraychart Legend.png", style = "position: relative;", height = "10%;"))#)
+       ),
+               
+    ########################################
+    ####          Batter LA/EV          ####
+    ########################################
+    
+    # let's build a dope explainer here where you can drag a 
+    # rope from the origin to see launch angle, exit velo, 
+    # distance/result ranges
+    tags$div(id = "laev", class = "col-xs-12 col-md-6",
+       plot_ly(x = ~XCoord, y = ~YCoord, data = dat, marker = list(size = 10), hovertext = ~Hit_TM_Text, showlegend = F, customdata = ~key) %>%
+         # filter(PlayResult != "Undefined") %>%
+         add_markers(color = ~ContactType, colors = c("Topped" = "darkgreen", "F&B" = "blue", "Under" = "lightgreen", "Solid" = "purple", "Weak" = "grey", "Barrel" = "gold"),
+                     hoverlabel = list(bgcolor = ~ContactType, bgcolors = c("Topped" = "darkgreen", "F&B" = "blue", "Under" = "lightgreen", "Solid" = "purple", "Weak" = "grey", "Barrel" = "gold")), hoverinfo = "text") %>%
+         add_annotations(showarrow = F, text = paste0("<b>", c("Barrel", "Solid\nContact", "Flares &\nBurners", "Topped", "Under", "Weak")), 
+                         x = ~c(ifelse(lhb, -1, 1) * c(90, 75, 65, 70, 20, 25)), 
+                         y = ~c(82, 60, 25, -70, 95, 15), textfont = list(size = 16), hoverinfo = "none") %>%
+         layout(title = "", margin = margin0,
+                xaxis = list(visible = F, range = c(ifelse(lhb, -115, -90), ifelse(lhb, 90, 115)), fixedrange = T), 
+                yaxis = list(visible = F, range = c(-115, 115), fixedrange = T),
+                images = list(list(
+                  source = raster2uri(readPNG(paste0("data/LAEV ", ifelse(lhb, "L", "R"), "HB Labeled.png"))),
+                  xref = "x", yref = "y", x = ifelse(lhb, -115, 0), y = -115, sizex = 115, sizey = 230,
+                  sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"),
+                  list(source = raster2uri(readPNG(paste0("data/Batter Contact Pics/", commasplit(params$batter), ".png"))), # Dallas Tessar.png"))),
+                       x = -105 * !lhb, sizex = 105 + 2.7 * lhb, y = -46, sizey = 98.15, layer = "below",
+                       sizing = "stretch", xanchor = "left", yanchor = "bottom", xref = "x", yref = "y")),
+                dragmode = "lasso") %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect", opacityDim = 0.1) %>%
+         onRender(video.and.hover.on.lasso),
+       tags$div(class = "legend",
+                tags$img(src = "www/LAEV Legend.png", style = "position: relative;", height = "10%;"))#, style = "position: relative;", height = "70%", width = "90%"))
+       )
+),
+    ####################################
+    ####        Batter Stats        ####
+    ####################################
+  tags$div(id = "stats", class = "row",
+    tags$div(id = "stats1", class = "col-xs-12 col-md-6",
+       plot_ly(data = data, showlegend = F, alpha = 0.5) %>%
+
+         add_histogram(x = ~Tru3, histnorm = "probability", color = I("black"), name = "All Data") %>% 
+         add_histogram(x = ~Hard_Hit, histnorm = "probability", color = I("black"), name = "All Data") %>%
+         
+         
+         add_histogram(data = dat, x = ~Tru3, histnorm = "probability", color = I("pink"), name = "Selected Data") %>% 
+         add_histogram(data = dat, x = ~Hard_Hit, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+         
+         add_annotations(data = gls[which(gls$stat %in% c("Walk", "Strikeout", "Home Run", "Hard Hit")),], x = ~stat, y = ~start, text = "<b>ACC<br>Starter", font = list(color = "rgb(49,146,54)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Walk", "Strikeout", "Home Run", "Hard Hit")),], x = ~stat, y = ~all.acc, text = "<b>All-ACC", font = list(color = "rgb(76,81,247)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Walk", "Strikeout", "Home Run", "Hard Hit")),], x = ~stat, y = ~first.team, text = "<b>1st Team", font = list(color = "rgb(157,77,187)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Walk", "Strikeout", "Home Run", "Hard Hit")),], x = ~stat, y = ~poy, text = "<b>ACC POY", font = list(color = "rgb(243,175,25)"), name = ~stat, showarrow = F) %>%
+
+
+         layout(title = "<br><b>Stats</b>", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = "", categoryorder= "array", 
+                             categoryarray = c("Walk", "Home Run", "Strikeout", "Hard Hit", "Not Hard Hit"), fixedrange = T),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = c(0:10), fixedrange = T), 
+                legend = list(orientation = "h", x= "Hit", y = .9), margin = margin0, dragmode = "pan") %>% 
+         highlight(on = "plotly_selected", off = "plotly_deselect", opacityDim = 0.1),
+       
+       p("Everything is per 10 Plate Appearances except the Hard Hit/Not Hard Hit (per 10 contacts). ")#,
+       #tags$br(),
+       #tags$br(),
+       #p("The idea is these numbers are what you'd rack up in 3 starts (1 weekend)")
+    ),
+       
+   
+    tags$div(id = "stats2", class = "col-xs-12 col-md-6",
+       plot_ly(data = data, showlegend = F, alpha = 0.5) %>%
+         add_histogram(x = ~Hit_No_Hit, histnorm = "probability", color = I("black"), name = "All Data", showlegend = T) %>%
+         add_histogram(x = ~Reach, histnorm = "probability", color = I("black"), name = "All Data") %>%
+         add_bars(x = "Bases", y = ~Bases, transforms = list(
+           list(type = "aggregate", aggregations = list(list(target = 'y', func = 'avg', enabled = T)))), color = I("black"), name = "All Data") %>%
+         
+         add_histogram(data = dat, x = ~Hit_No_Hit, histnorm = "probability", color = I("pink"), name = "Selected Data", showlegend = T) %>%
+         add_histogram(data = dat, x = ~Reach, histnorm = "probability", color = I("pink"), name = "Selected Data") %>%
+         add_bars(data = dat, x = "Bases", y = ~Bases, transforms = list(
+           list(type = "aggregate", aggregations = list(list(target = 'y', func = 'avg', enabled = T)))), color = I("pink"), name = "Selected Data") %>%
+         
+         add_annotations(data = gls[which(gls$stat %in% c("Bases", "Reached Base", "Hit")),], x = ~stat, y = ~start, text = "<b>ACC<br>Starter", font = list(color = "rgb(49,146,54)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Bases", "Reached Base", "Hit")),], x = ~stat, y = ~all.acc, text = "<b>All-ACC", font = list(color = "rgb(76,81,247)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Bases", "Reached Base", "Hit")),], x = ~stat, y = ~first.team, text = "<b>1st Team", font = list(color = "rgb(157,77,187)"), name = ~stat, showarrow = F) %>%
+         add_annotations(data = gls[which(gls$stat %in% c("Bases", "Reached Base", "Hit")),], x = ~stat, y = ~poy, text = "<b>ACC POY", font = list(color = "rgb(243,175,25)"), name = ~stat, showarrow = F) %>%
+
+
+         layout(title = "<br><b>Stats</b>", barmode = "overlay", hovermode = "closest",
+                xaxis = list(title = "", categoryorder= "array", 
+                             categoryarray = c("Hit", "Reached Base", "Didn't Reach", "No Hit"), fixedrange = T),
+                yaxis = list(title = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = c(0:10), fixedrange = T), 
+                legend = list(orientation = "h", x = "Hit", y = .9), margin = margin0, dragmode = "pan") %>% 
+         highlight(on = "plotly_selected", off = "plotly_deselect")#,
+       
+       # p("Everything is per 10 Plate Appearances except the Hit/No Hit (per 10 At-Bats)."),
+       # tags$br(),
+       # tags$br(),
+       # p("The idea is these numbers are what you'd rack up in 3 starts (1 weekend)")
+    )
+  ),
+       
+  tags$div(class = "row",      
+    ########################################
+    ####      Batter Contact Type       ####
+    ########################################
+  
+    tags$div(id = "contacttype", class = "col-xs-12 col-md-6",
+       plot_ly(x = ~ContactType, data = dat, name = "Contact Types") %>%
+         add_histogram(name = "Contact_Type", histnorm = "probability", showlegend = F) %>%
+         layout(xaxis = list(fixedrange = T), yaxis = list(label = "", range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = c(0:10), fixedrange = T), 
+                title = "<br><b>Contact Quality", margin = margin0, dragmode = "pan") #%>%
+         #highlight(on = "plotly_selected", off = "plotly_deselect")# %>%
+       #  onRender(video.on.click)
+    ),
+       
+        
+    ########################################
+    ####    Batter Batted-Ball Types    ####
+    ########################################
+   
+    tags$div(id = "battedballtype", class = "col-xs-12 col-md-6",
+       plot_ly(data = dat, name = "Batted Ball Types") %>% 
+         add_histogram(x = ~HitType, histnorm = "probability") %>% 
+         layout(xaxis = list(fixedrange = T), yaxis = list(range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = c(0:10), label = "", fixedrange = T), 
+                title = "<br><b>Contact Type", margin = margin0, dragmode = "pan") %>%
+         highlight(on = "plotly_selected", off = "plotly_deselect") #%>%
+       #  onRender(video.on.click)
+       )
+    ),
+
+  tags$div(class = "row",
+           tags$div(id = "countshist", class = "col-xs-12 col-md-6",
+                    plot_ly(data = dat, name = "Counts") %>%
+                      add_histogram(x = ~Count, histnorm = "probability") %>%
+                      layout(xaxis = list(fixedrange = T), yaxis = list(range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = seq(0, 100, by = 10), label = "", fixedrange = T),
+                             title = "<br><b>Count", margin = margin0, dragmode = "pan") %>%
+                      highlight(on = "plotly_selected", off = "plotly_deselect")
+                    ),
+            tags$div(id = "pitcheshist", class = "col-xs-12 col-md-6",
+                    plot_ly(data = dat, name = "Pitches") %>%
+                      add_histogram(x = ~TaggedPitchType, histnorm = "probability") %>%
+                      layout(xaxis = list(fixedrange = T), yaxis = list(range = c(0, 1), tickmode = "array", tickvals = seq(0, 1, by = .1), ticktext = seq(0, 100, by = 10), label = "", fixedrange = T),
+                             title = "<br><b>Pitch", margin = margin0, dragmode = "pan") %>%
+                      highlight(on = "plotly_selected", off = "plotly_deselect")
+                    )
+           
+           )
+
+
+  ),
+  
+##  Only if it's a phone
+tags$div(id = "hoverinfo", style = "z-index: 4; width: 50%; position: relative;",
+                  "Click a Pitch to see additional info here"),
+
+  ####  Video Buttons   ####
+tags$span(id = "videobuttons", class = "legend", #style = "display: block;", #style = "right: 10%; display: inline; z-index: 3;", #position: absolute;
+         tags$button(style = "z-index: 7;", class = "btn-success", tags$a(style = "color: black;", id = "tvfeed", target = "_blank", "TV")),
+         tags$button(class = "btn-success", tags$a(style = "color: black;", id = "highspeed", target = "_blank", "Slo-Mo"))),
+
+
+tags$div(class = "row", id = "videodrops",
+         tags$div(class = "col-xs-12",
+                  tags$iframe(src = paste0("https://micahdh.github.io/Hitters/", params$batter, " Video Dropdown.html"), style = "height: 400px; width: 100%;")
+                #knitr::asis_output(cat(videodropdown(batterx, in.app = T)))
+                  
+                  )),
+  
+  ##############################
+  ####    Select Visual     ####
+  ##############################
+  
+  ## could be cool to turn this into a dropdown -- would also smooth the process
+  ## of adding a second, etc visuals (just a second dropdown with the number tbh)
+tags$div(id = "avgsbtns", class = "noshow2start", style = "right: 0px; bottom: 6%; width: 35%; position: fixed; z-index: 5; align: right;",
+    tags$button("Contact Quality", onclick = "showcontacttype()", class = "btn-primary", style = "display: block;"),
+    tags$button("Contact Type", onclick = "showbattedballtype()", class = "btn-primary", style = "display: block:"),
+    tags$button("AVG/OBP/SLG", onclick = "showstats2()", class = "btn-primary", style = "display: block;"),
+    tags$button("HR/BB/K/Hard Hit", onclick = "showstats()", class = "btn-primary", style = "display: block;")
+),
+
+  tags$footer(
+    tags$div(id = "changevisual", style = "overflow: scroll;",#width: 55%; height: 15%; left: 0px; margin: 0; padding: 0;",
+        
+        tags$button(id = "showloc", "Location", onclick = "showlocations()", class = "btn-primary"),
+        tags$button(id = "showspray", "Spraychart", onclick = "showspray()", class = "btn-primary"),
+        tags$button(id = "showlaev", "Angle/Exit Velo", onclick = "showlaev()", class = "btn-primary"),
+        tags$button(class = "btn-success", onclick = "expandvideodrop()", "Video"), #tags$a(id = "videodrop", href = paste(params$batter, "Video Dropdown.html"), "Video")),
+        tags$button(class = "btn-primary", "Avgs", onclick = "showavgsbtns()")
+        
+    
+    )
+    
+  )
+    # tags$a(id = "showhotcold", class = "footer", href = paste0("https://micahdh.github.io/Hot_Cold_Zones/Hitter/", gsub(params$batter, pattern = " ", replacement = "_"), "_Hot_Cold_Zones.pdf"), tags$img(src = "www/Hot Cold Icon.png"))
+       
+)
+)
+
+
+
+```
+
+```{r results='asis', eval=F}
+cat(videodropdown(batterx, in.app = T))
+
+```
+
+```{r scratchwork, eval=F}
+
+## stats
+         # add_fun(function(p) {
+         #   p %>% group_by() %>% summarise(slg = mean(Bases)) %>%
+         #     add_bars(x = "Bases", y = ~slg)
+         # }) %>%
+         # plotly_data()
+         
+         # plotly_data()#list(x = ~gls$stat2, y = ~gls$start, color = colors[1], type = "scatter", mode = "markers") %>%
+         # add_fun(function(p){
+         #   p %>%
+         #     group_by() %>%
+         #     summarise(slg = mean(Bases, na.rm = T)) %>%
+         #     add_bars(x = "Bases", y = ~slg)
+         #   
+         # }) %>%
+
+config(modebarbuttons)
+
+stats1
+stats2
+locations
+spray
+leave
+contacttype
+battedballtype
+  function show1(id, is.stat){
+    hideeverything();
+    document.getElementById(id).style.display = "block";
+    if(is.stat){
+      showavgbtns();
+    } else{
+      document.getElementById("videobuttons").style.display = "none";
+      document.getElementById("hoverinfo").style.display = "none";
+    }
+  }
+'<div id="videoplayer">',
+'<iframe id="video" src="https://player.vimeo.com/video/293990842" width="930" height="660" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>',
+'</div>'
+
+```

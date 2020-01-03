@@ -1,0 +1,124 @@
+<html>
+
+
+<head>
+<style type="text/css">
+.knitr .inline {
+  background-color: #f7f7f7;
+  border:solid 1px #B0B0B0;
+}
+.error {
+	font-weight: bold;
+	color: #FF0000;
+}
+.warning {
+	font-weight: bold;
+}
+.message {
+	font-style: italic;
+}
+.source, .output, .warning, .error, .message {
+	padding: 0 1em;
+  border:solid 1px #F7F7F7;
+}
+.source {
+  background-color: #f5f5f5;
+}
+.rimage .left {
+  text-align: left;
+}
+.rimage .right {
+  text-align: right;
+}
+.rimage .center {
+  text-align: center;
+}
+.hl.num {
+  color: #AF0F91;
+}
+.hl.str {
+  color: #317ECC;
+}
+.hl.com {
+  color: #AD95AF;
+  font-style: italic;
+}
+.hl.opt {
+  color: #000000;
+}
+.hl.std {
+  color: #585858;
+}
+.hl.kwa {
+  color: #295F94;
+  font-weight: bold;
+}
+.hl.kwb {
+  color: #B05A65;
+}
+.hl.kwc {
+  color: #55aa55;
+}
+.hl.kwd {
+  color: #BC5A65;
+  font-weight: bold;
+}
+</style>
+<title>Batter Dashboard</title>
+  <!-- Plotly.js -->
+   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+   <script src="https://cdn.plot.ly/plotly-1.8.0.min.js"></script>
+</head>
+
+<body>
+  <div id="graph"><!-- Plotly chart will be drawn inside this DIV --></div>
+  <script>
+//var rawDataURL = 'data/Busch.csv';
+var rawDataURL = 'data/sample prepped data.json';
+var xField = 'PlateLocSide';
+var yField = 'PlateLocHeight';
+
+
+Plotly.d3.csv(rawDataURL, function(err, rawData) {
+    if(err) throw err;
+
+    var data = prepData(rawData);
+    var layout = {
+        title: 'Time series with range slider and selectors',
+        xaxis: {
+            fixedrange: true
+        },
+        yaxis: {
+            fixedrange: true
+        }
+    };
+
+    Plotly.plot('graph', data, layout);
+});
+
+function prepData(rawData) {
+    var x = [];
+    var y = [];
+
+    console.log(rawData.length)
+
+    rawData.forEach(function(datum, i) {
+        //if(i % 100) return;
+
+        x.push(datum[xField]);
+        y.push(datum[yField]);
+    });
+
+    return [{
+        mode: 'markers',
+        x: x,
+        y: y
+    }];
+}
+ </script>
+</body>
+
+</html>
+
+
+

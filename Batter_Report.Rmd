@@ -1,0 +1,450 @@
+---
+output: html_document
+  # flexdashboard::flex_dashboard:
+  #   orientation: columns
+  #   vertical_layout: scroll
+    
+params:
+  game:
+    value: x
+  allplayers:
+    value: x
+  practice:
+    value: x
+css: www/style.css
+
+---
+
+
+
+```{r setup, include=F}
+
+
+## expected hit result
+## tabs at top to change hitter, date (hitter goes to same date or most recent)
+
+knitr::opts_chunk$set(echo = F, message = F, warning = F, out.width = "100%")
+
+
+library(flexdashboard)
+library(crosstalk)
+knitr::opts_chunk$set(echo = F, message = F)
+source("global.R")
+
+#params <- list(game = slide.trackman.columns(read.csv(file = paste0("/Users/micahdaley-harris/Desktop/TAR/TAR Database/Scrimmage 9.20.18.csv"), stringsAsFactors = F)), batter = "Inclan, Clemente")
+coords <- read.csv(file = "data/Batter LAEV Visual Coords.csv", stringsAsFactors = F)
+
+assert_that(is.logical(params$practice))
+is.practice <- params$practice
+
+game <- params$game
+
+game <- game[which(game$PitchCall != "Undefined" | is.practice),]
+
+made.contact <- any(is.practice | game$PitchCall == "InPlay" & game$HitType != "Bunt" & !is.na(game$Angle))
+
+game <- game %>% 
+  arrange(PitchNo) %>%
+  mutate(XLand = c(cos((90 - Bearing) * pi / 180) * Distance), 
+         YLand = c(sin((90 - Bearing) * pi / 180) * Distance), 
+         XCoord = c(cos(Angle * pi / 180) * ExitSpeed) , 
+         YCoord = c(sin(Angle * pi / 180) * ExitSpeed))
+
+if(is.practice){
+  game$AB_Num <- c(1:nrow(game))
+  game$PitchofPA <- c(1:nrow(game))
+  game$PAofInning <- c(1)
+} else{
+  game <- game %>%
+    mutate(AB_End = c(PitchCall %in% c("InPlay", "HitByPitch") | PlayResult != "Undefined" | KorBB %in% c("Strikeout", "Walk")),
+         AB_Result = replace(ifelse(!AB_End, "", ifelse(KorBB %in% c("Strikeout", "Walk"), KorBB, paste0(ifelse(PlayResult == "Undefined", PitchCall, PlayResult), ifelse(HitType == "Undefined", "", paste0(" (", HitType, ")"))))), !AB_End, NA),
+         AB_Num = c(1, head(1 + cumsum(AB_End), -1))) %>%
+  fill(., AB_Result, .direction = "up") %>%
+  mutate(masterkey = paste0(AB_Num, " - ", AB_Result))
+}
+
+
+
+              
+    #data[which(!is.na(data$XLand) & data$PlayResult == "Undefined")[which(!in.out(as.matrix(boshcoords), as.matrix(data[which(!is.na(data$XLand) & data$PlayResult == "Undefined"),c("XLand", "YLand")])) & data[which(!is.na(data$XLand) & data$PlayResult == "Undefined"), "Distance"] > 320)],"PlayResult"] <- c("HomeRun")
+    
+    for(contact.type in c("barrel", "solid", "F&B", "topped", "under")){
+      game[which(!is.na(game$XCoord)),contact.type] <- as.numeric(in.out(as.matrix(coords[which(coords$Bin == contact.type),c("X", "Y")]), as.matrix(game[which(!is.na(game$XCoord)),c("XCoord", "YCoord")])))
+    }
+    game[which(!is.na(game$XCoord)),"weak"] <- as.numeric(game[which(!is.na(game$XCoord)),"ExitSpeed"] < 60)
+    
+    game <- cbind(game, ContactType = ifelse(as.logical(game$barrel), "Barrel",
+                                             ifelse(as.logical(game$solid), "Solid",
+                                                    ifelse(as.logical(game$`F&B`), "F&B",
+                                                        ifelse(as.logical(game$weak),"Weak",
+                                                              ifelse(as.logical(game$topped), "Topped", 
+                                                                  ifelse(as.logical(game$under),"Under",
+                                                                         "None")))))), 
+                  LAEVcol = ifelse(as.logical(game$barrel), "red", 
+                                   ifelse(as.logical(game$solid), "lightpink",
+                                          ifelse(as.logical(game$`F&B`), "coral", 
+                                                 ifelse(as.logical(game$weak), "tan",
+                                                        ifelse(as.logical(game$under), "lightskyblue",
+                                                               ifelse(as.logical(game$topped), "darkgreen",
+                                                                      "black")))))), stringsAsFactors = F)
+    
+    game$XCoord <- game$XCoord# * ifelse(game$BatterSide == "Left", -1, 1)
+    
+    batter <- mode(game$Batter)
+    gamedate <- gsub(x = mode(game$Date), pattern = "/", replacement = "-")
+    
+    knitr::asis_output("<body>")
+
+```
+
+
+---
+title: `r paste(batter, "Game Report", gamedate)`
+---
+
+
+
+```{r pitchlocs, eval=T}
+# renderPlotly({
+par(mar = c(.5, .5, .8, .5))
+if(is.practice){
+  plot.pitches(game, shape = 16, legend.cex = .9, plot.title = "", legend.type = "laev", pitch.numbers.col = "black")
+  } else{
+    plot.pitches(game, shape = "ABNum", legend.cex = .9, plot.title = "") 
+  }
+
+if(!is.practice){
+  loc.dat <- plot.pitches.gg(data = game, returndata = T, tag.pitches = F)
+  
+  loc.dat$key <- loc.dat$masterkey
+  loc.dat$PitchCall <- gsub(gsub(gsub(gsub(gsub(loc.dat$PitchCall, pattern = "HomeRun", replacement = "Home Run"), pattern = "HitByPitch", replacement = "Hit By Pitch"), pattern = "FoulBall", replacement = "Foul"), pattern = "BallCalled", replacement = "Ball"), pattern = "([A-Z][a-z]+)([A-Z][a-z]+)", replacement = "\\2 \\1")
+  
+  loc.dat$ExpCalledStrike <- ""
+  
+  loc.dat <- apply.exp.called.strike(loc.dat)
+  
+  gm <- SharedData$new(loc.dat, group = "Pick an at-bat")
+  # gm <- SharedData$new(loc.dat)
+  # filter_select(id = "ab", label = "Pick an at-bat", group = "Pick an at-bat", sharedData = gm)
+  
+  real.strikezone <- read.csv(file = "data/Real Strike Zone.csv", stringsAsFactors = F)
+  #applybbexpoutcomes
+  
+  show.strikezone = T
+  show.real.strikezone = T
+  shape.type = "pitchtype"
+  type = "PlateLoc"
+  bside = "Left"
+  lefty <- mode(game$BatterSide) == "Left"
+  p.view = F
+  dragmode = "pan"
+  fixaxes = T
+  
+  other.real.strikezone <- real.strikezone[which(real.strikezone$BatterSide != bside), c("PlateLocSide", "PlateLocHeight")]
+  real.strikezone <- real.strikezone[which(real.strikezone$BatterSide == bside), c("PlateLocSide", "PlateLocHeight")]
+  
+  
+  pitchtype.shapes <- c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CU" = 17, "BB" = 17)
+  
+  lhb.pic <- readPNG("data/LHB Real Zone.png")#readPNG("data/LHB Catcher View.png")
+  rhb.pic <- readPNG("data/RHB Real Zone.png")#readPNG("data/RHB Catcher View.png")
+    
+   ggplotly(ggplot(gm, aes(PlateLocSide, PlateLocHeight, text =
+                           paste("<br>Pitch:", TaggedPitchType,
+
+                                                                       "<br>Called Strike Prob:", ifelse(is.na(Exp.Called.Strike), "Unknown", paste(round(pmax(0, pmin(100, 100 * Exp.Called.Strike))), "%")),
+                           paste("<br>Count:",
+                                                                             paste(Balls, Strikes, sep = "-"),
+                                                                                 "<br>Date:", Date,
+                                                                                 "<br>Batter:", Batter,
+                                                                                 "<br>Inning:", Inning)))) +
+      geom_point(aes(colour = factor(PitchCall), shape = factor(TaggedPitchType), key = key), size = 3.5) +
+  
+      scale_color_manual(name = "Pitch Result, Type", values = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "Error" = "blue", "Sacrifice" = "blue", "InPlay" = "blue", "Ball" = "forestgreen", "BallIntentional" = "forestgreen", "Called Strike" = "red", "Swinging Strike" = "darkred", "Foul" = "darkred", "Hit By Pitch" = "black",  "Undefined" = 'white')) +
+      {if(shape.type == "ABNumPCH") scale_shape_manual(values = abshapes)} +#shape == "ABNumPCH"
+      {if(shape.type == "pitchtype") scale_shape_manual(values = pitchtype.shapes)} + #shape == "pitchtype"
+      #{if(T) geom_label(aes(PlateLocSide, PlateLocHeight, label = PitchofPA, colour = 'orange', size = 0.9)) }+
+
+      scale_x_continuous(limits = c(-3, 3), labels = NULL) +
+      scale_y_continuous(limits = c(ifelse(type == "Contact", -2, 0), 5), labels = NULL) +
+      labs(title = "", x = "", y = "", color = "Pitch Type, Result", shape = "")
+      , source = 'loc', tooltip = "text") %>%
+  
+      layout(title = "",
+             xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes),
+             images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             ), dragmode = dragmode) %>%
+   highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = F, selectize = T, inline = T)
+}
+  
+```
+
+
+
+
+```{r space, results="asis", eval=F}
+cat(rep("<br>", 10))
+
+```
+
+```{r}
+missed.pitches <- unique(game[which(game$PitchCall == "InPlay" & (is.na(game$Angle) | is.na(game$Bearing))), "AB_Num"])
+
+if(length(missed.pitches) > 0 & !is.practice) knitr::asis_output(paste0("<p>Trackman does not have hit data for these at-bats: ", paste0(missed.pitches, collapse = ", "), "<p>"))
+
+
+```
+
+
+```{r spraychart}
+
+  pic <- readPNG("data/Bosh Overhead Cropped on Home Plate.png")
+  
+  result.order <- c("Single", "Double", "Triple", "HomeRun", "Out", "Sacrifice", "Error", "Undefined")
+  if(T){
+    par(mar = c(.3, .3, .3, .3))
+          plot(x = 0, y = 0, type = "n", xlim = c(-249, 249), ylim = c(0, 456.5), axes = FALSE, xlab = "", ylab = "", main = "")
+      #title(main = unique(game$Date)[1], cex.main = 2)
+      rasterImage(pic, xleft = -249, xright = 249, ybottom = 0, ytop = 456.5)
+
+    if(made.contact){
+      points(game[which(game$PitchCall == "InPlay" | is.practice & !is.na(game$Angle)), c("XLand", "YLand")], pch = 16, cex = 2.3, col = game[which(game$PitchCall == "InPlay" | is.practice & !is.na(game$Angle)), "LAEVcol"])
+      if(length(which(game$Distance >= 340)) > 0){
+        text(game[which(game$Distance >= 340),"XLand"], game[which(game$Distance >= 340),"YLand"], round(game[which(game$Distance >= 340),"Distance"]), pos = ifelse(game[which(game$Distance >= 340),"Bearing"] < 35, 4, 2), col = "red")
+        }
+      #if(length(which(data$PlayResult == "HomeRun")) > 0){text(data[which(data$PlayResult == "HomeRun"),"XLand"], data[which(data$PlayResult == "HomeRun"),"YLand"], "*", pos = 3, col = "green")}
+      if(nrow(game) > 0) text(game$XLand, game$YLand, game$AB_Num, col = "black") 
+      #else{text(game$XLand, game$YLand, which(!is.na(game$Angle)), col = "black")}
+
+    } 
+    #spraychart(game[which(game$PitchCall == "InPlay" & game$HitType != "Bunt"),], plot.title = "Spraychart")
+  } else if(made.contact){
+  gg <- ggplot(game[which(game$PitchCall == "InPlay" & game$HitType != "Bunt"),], aes(XLand, YLand, label = ifelse(Distance >= 340, round(Distance), ""), # took out key = key
+                   text = paste("Date:", Date,
+                                "<br>Launch Angle:", round(Angle), "°",
+                                "<br>Exit Velo:", round(ExitSpeed), "mph",
+                                "<br>Distance:", round(Distance), "feet",
+                                ifelse(is.practice, "", paste(
+                                  "<br>Result:", PlayResult,
+                                "<br>Inning:", Inning,
+                                "<br>Count:", paste(Balls, Strikes, sep = "-")))
+                                
+                                ))) +
+    geom_point(aes(color = as.factor(PlayResult), shape = as.factor(AB_Num)), size = 3) +
+    scale_x_continuous(limits = c(-249, 249), labels = NULL, breaks = c(-300, 300)) +
+    scale_y_continuous(limits = c(0, 456.5), labels = NULL, breaks = c(-10, 500)) +
+    #geom_label(color = "red") +
+    labs(title = "Spraychart", x = "", y = "", color = "Result, AB #", shape = "")
+  
+  g <- ggplotly(gg, tooltip = "text", source = 'spraychart') %>%
+    layout(images = list(
+      source = raster2uri(pic),
+      xref = "x", yref = "y", x = -249, y = 0, sizex = 249 * 2, sizey = 456.5,
+      sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+    ), dragmode = "pan", xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+#g %>% highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = TRUE, selectize = F)
+#  })
+   g
+  }
+```
+
+<br>
+
+
+```{r laev, eval=T}
+# renderPlotly({
+if(T){
+  par(mar = c(.5, .2, .5, .2))
+  laev.visual(game[which(game$PitchCall == "InPlay" & game$HitType != "Bunt" | is.practice),], batter = batter)
+} else if(made.contact){
+  p2 <- laev.visual.ly(game[which(game$PitchCall == "InPlay" & game$HitType != "Bunt"),], game = F) #%>% highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = TRUE, selectize = TRUE)
+  p2 <- p2 %>% layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T), dragmode = "pan")
+  p2
+}
+  #subplot(g, p) %>% highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = TRUE, selectize = TRUE)
+# })
+```
+
+
+
+
+```{r}
+## Discipline
+
+
+## Early/Late
+  # Exit velo by location and bearing
+
+
+## Over/Under
+
+#### Can be bar charts w/ stars for each AB
+
+
+
+```
+
+
+
+
+
+
+
+```{r dropdowns, results="asis"}
+cat(c("<style>
+body {
+  background-color: lightblue;
+}
+.dropbtn {
+    background-color: #3498DB;
+    color: white;
+    padding: 16px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+}
+
+.dropbtn:hover, .dropbtn:focus {
+    background-color: #2980B9;
+}
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f1f1f1;
+    min-width: 160px;
+    overflow: auto;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
+.dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown a:hover {background-color: #ddd;}
+
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+}
+
+/* Style the buttons inside the tab */
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+    font-size: 17px;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+    background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+    background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+}
+.show {display: block;}
+</style>
+<script>
+/* When the user clicks on the button, 
+toggle between hiding and showing the dropdown content */
+function myFunction() {
+    document.getElementById('myDropdown').classList.toggle('show');
+}
+
+// Close the dropdown if the user clicks outside of it
+window.onclick = function(event) {
+  if (!event.target.matches('.dropbtn')) {
+
+    var dropdowns = document.getElementsByClassName('dropdown-content');
+    var i;
+    for (i = 0; i < dropdowns.length; i++) {
+      var openDropdown = dropdowns[i];
+      if (openDropdown.classList.contains('show')) {
+        openDropdown.classList.remove('show');
+      }
+    }
+  }
+}
+</script>",
+# video links
+paste(change.date.drop(player = batter, report.type = ifelse(is.practice, "Practice", "Post_Game")), collapse = "\n"),
+#rep("<br>", 1),
+paste(change.player.drop(thedate = gamedate, players = sort(params$allplayers), report.type = ifelse(is.practice, "Practice", "Post_Game")), collapse = "\n"), rep("<br>", 5)))
+
+
+```
+
+
+
+
+```{r eval=F}
+lefty <- mode(game$BatterSide) == "Left"
+if(lefty) game$XCoord <- game$XCoord * -1
+data <- game
+
+
+  limage <- readPNG("data/LAEV LHB Labeled.png")
+  rimage <- readPNG("data/LAEV RHB Labeled.png")
+  
+    batterpic <- tryCatch({readPNG(paste0("data/Batter Contact Pics/", commasplit(batter), ".png"))}, error = function(error){return(NULL)})
+  prepic <- tryCatch({readPNG(paste0("data/Batter Contact Pics/", commasplit(batter), " Pre Swing.png"))}, error = function(error){return(NULL)})
+  
+  batpic.lst <- list()
+  
+  if(lefty){
+    if(!is.null(batterpic)) batpic.lst <- list(source = raster2uri(batterpic), x = 0, y = -46, sizex = 107.7, sizey = 98.15, layer = "below", sizing = "stretch", xanchor = "left", yanchor = "bottom", xref = "x", yref = "y")
+  } else{
+    
+    if(!is.null(batterpic)) batpic.lst <- list(source = raster2uri(batterpic), x = -105, y = -46, sizex = 105, sizey = 98.15, layer = "below", sizing = "stretch", xanchor = "left", yanchor = "bottom", xref = "x", yref = "y")
+    
+  }
+  data <- data[which(data$PitchCall == "InPlay"),]
+  p <- plot_ly(x = data$XCoord, y = data$YCoord, data = data, source = "laev", hoverlabel = list(bgcolor = data$LAEVcol), hoverinfo = "text", name = "Contact Type, AB", text = ifelse(data$PitchUID %startswith% "<", data$PitchUID, 
+                                                paste("Contact Type:", data$ContactType,
+                                                    "<br>Launch Angle:", round(data$Angle),
+                                                    "<br>Exit Velo:", round(data$ExitSpeed),
+                                                    "<br>Result:", data$PlayResult,
+                                                    "<br>Date:", data$Date,
+                                                    "<br>Inning:", data$Inning,
+                                                    "<br>Count:", paste(data$Balls, data$Strikes, sep = "-"),
+                                                    "<br>Distance:", round(data$Distance)))) %>%
+    add_annotations(showarrow = F, text = paste0("<b>", c("Barrel", "Solid\nContact", "Flares &\nBurners", "Topped", "Under", "Weak")), x = ~c(ifelse(lefty, -1, 1) * c(90, 75, 65, 70, 20, 25)), y = ~c(82, 60, 25, -70, 95, 15), textfont = list(size = 16), showlegend = F, hoverinfo = "none") %>%#, #text = c("Barrel: 68% HR<br>26% Out<br>6% 2B/3B", "Solid: 40% Out<br>35% HR<br>25% 2B/3B",  "Flares & Burners: 57% 1B<br>29% Out<br>14% 2B/3B", 
+    #                                                                                                                                                                                                                                        #            "Topped: 74% Out<br>24% 1B<br>2% 2B/3B", "Under: 80% Out<br>11% 1B<br>7% 2B/3B<br>2% HR", "Weak: 82% Out<br>18% 1B"), hoverinfo = "text", showlegend = F) %>%
+    layout(title = "Contact Quality", xaxis = list(visible = F, range = c(ifelse(lefty, -115, -90), ifelse(lefty, 90, 115))), yaxis = list(visible = F, range = c(-115, 115)),
+           images = list(list(
+             source = raster2uri(vector.ifelse(c(lefty, !lefty, F), list(limage, rimage), if.none = list())),
+             xref = "x", yref = "y", x = ifelse(lefty, -115, 0), y = -115, sizex = 115, sizey = 230, 
+             sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+           ), batpic.lst), dragmode = "lasso") 
+#background-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTJmFH6a29qmcsKHobhUVDcoHiuUbE2jwYuuN-ZYtpZnzUlJhnB');
+
+```

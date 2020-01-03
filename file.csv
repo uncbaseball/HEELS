@@ -1,0 +1,78 @@
+"Batter","Pitcher","Inning","Top.Bottom","Balls","Strikes","Outs","Result","Pitch Type","Velo"
+"Lala, Jordan","Bergner, Austin",1,"Top",1,2,0,"InPlay","FB",91.6570148114742
+"Vilar, Anthony","Bergner, Austin",1,"Top",0,1,0,"InPlay","FB",90.6278838437815
+"Zamora, Freddie","Bergner, Austin",1,"Top",1,0,1,"InPlay","FB",91.5149563573521
+"Del Castillo, Adrian","Bergner, Austin",1,"Top",2,1,1,"InPlay","FB",89.8241884660641
+"Toral, Alejandro","Bergner, Austin",1,"Top",0,1,1,"InPlay","FB",92.5628904174426
+"Gil, Ray","Bergner, Austin",1,"Top",3,2,2,"InPlay","CH",83.6724820821788
+"Harris, Dylan","Van Belle, Brian",1,"Bottom",0,0,0,"InPlay","FB",88.0053427765909
+"Busch, Michael","Van Belle, Brian",1,"Bottom",0,1,0,"InPlay","CH",80.315497744913
+"Freeman, Ike","Van Belle, Brian",1,"Bottom",2,1,0,"InPlay","CH",80.7073725749855
+"Roberts, Caleb","Van Belle, Brian",1,"Bottom",2,2,1,"InPlay","BB",78.881926345334
+"Sabato, Aaron","Van Belle, Brian",1,"Bottom",2,1,1,"InPlay","FB",89.0631334307023
+"McGee, Ashton","Van Belle, Brian",1,"Bottom",0,0,1,"InPlay","Und",81.6022735869411
+"Hesterlee, Jackson","Van Belle, Brian",1,"Bottom",0,2,1,"StrikeSwinging","CH",80.5246435093672
+"Cloonan, Dylan","Bergner, Austin",1,"Bottom",0,0,2,"InPlay","FB",89.6042959021872
+"Amditis, Michael","Bergner, Austin",2,"Top",2,2,0,"InPlay","FB",90.0328301043647
+"Crosbie, Chad","Bergner, Austin",2,"Top",3,1,1,"BallCalled","FB",90.4216014445631
+"Lala, Jordan","Bergner, Austin",2,"Top",1,0,1,"InPlay","CH",83.4794651987693
+"Serretti, Danny","Van Belle, Brian",2,"Bottom",1,2,0,"StrikeSwinging","CH",79.722642433785
+"Martorano, Brandon","Van Belle, Brian",2,"Bottom",2,2,1,"StrikeCalled","FB",88.7301945465287
+"Harris, Dylan","Van Belle, Brian",2,"Bottom",2,1,2,"InPlay","FB",88.4474374285353
+"Busch, Michael","Van Belle, Brian",2,"Bottom",2,1,2,"InPlay","CH",79.575566435133
+"Freeman, Ike","Van Belle, Brian",2,"Bottom",1,1,2,"InPlay","CH",79.6413535292845
+"Vilar, Anthony","Bergner, Austin",3,"Top",3,2,0,"InPlay","CH",82.9972686765612
+"Zamora, Freddie","Bergner, Austin",3,"Top",1,1,1,"InPlay","FB",90.8253659806439
+"Del Castillo, Adrian","Bergner, Austin",3,"Top",2,2,2,"InPlay","FB",91.4381871046744
+"Roberts, Caleb","Van Belle, Brian",3,"Bottom",1,1,0,"InPlay","CH",79.9943636643443
+"Sabato, Aaron","Van Belle, Brian",3,"Bottom",2,0,0,"InPlay","FB",87.3410592865174
+"McGee, Ashton","Van Belle, Brian",3,"Bottom",0,0,0,"InPlay","FB",87.8268394401459
+"Hesterlee, Jackson","Van Belle, Brian",3,"Bottom",1,2,1,"StrikeSwinging","CH",80.2908868673294
+"Serretti, Danny","Van Belle, Brian",3,"Bottom",0,1,2,"InPlay","CH",80.8097535013634
+"Martorano, Brandon","Van Belle, Brian",3,"Bottom",0,2,2,"StrikeCalled","BB",79.2762225707527
+"Toral, Alejandro","Bergner, Austin",4,"Top",3,2,0,"BallCalled","FB",90.818256786013
+"Gil, Ray","Bergner, Austin",4,"Top",2,1,0,"InPlay","FB",90.3627974330984
+"Cloonan, Dylan","Bergner, Austin",4,"Top",0,2,1,"InPlay","CH",82.9998619201131
+"Amditis, Michael","Bergner, Austin",4,"Top",0,2,2,"InPlay","BB",76.6982025186392
+"Harris, Dylan","Cook, Jeremy",4,"Bottom",3,1,0,"InPlay","FB",87.7364721058953
+"Busch, Michael","Cook, Jeremy",4,"Bottom",3,2,1,"InPlay","FB",89.3071070022273
+"Freeman, Ike","Cook, Jeremy",4,"Bottom",3,1,2,"BallCalled","FB",87.5581348123147
+"Roberts, Caleb","Cook, Jeremy",4,"Bottom",3,1,2,"InPlay","FB",87.6928610498609
+"Crosbie, Chad","Bergner, Austin",5,"Top",1,2,0,"StrikeSwinging","BB",76.9191542871156
+"Lala, Jordan","Bergner, Austin",5,"Top",3,0,1,"BallCalled","FB",89.9379992969349
+"Vilar, Anthony","Bergner, Austin",5,"Top",2,1,1,"InPlay","FB",89.6756245562905
+"Zamora, Freddie","Bergner, Austin",5,"Top",1,1,1,"InPlay","FB",90.6914501988207
+"Sabato, Aaron","Cook, Jeremy",5,"Bottom",2,1,0,"InPlay","CH",81.1301982731561
+"McGee, Ashton","Cook, Jeremy",5,"Bottom",1,2,0,"StrikeCalled","FB",87.4364121763768
+"Tessar, Dallas","Cook, Jeremy",5,"Bottom",3,1,1,"InPlay","FB",88.9230613265354
+"Serretti, Danny","Cook, Jeremy",5,"Bottom",3,1,2,"BallCalled","FB",89.2686738394502
+"Martorano, Brandon","Cook, Jeremy",5,"Bottom",0,0,2,"InPlay","CH",79.4717888696187
+"Del Castillo, Adrian","Bergner, Austin",6,"Top",0,1,0,"InPlay","CH",83.1259948568982
+"Toral, Alejandro","Bergner, Austin",6,"Top",1,1,1,"InPlay","FB",90.5125142305975
+"Gil, Ray","Bergner, Austin",6,"Top",0,1,2,"InPlay","BB",75.0649807958456
+"Cloonan, Dylan","Bergner, Austin",6,"Top",1,1,2,"InPlay","CH",83.0269290072767
+"Amditis, Michael","Bergner, Austin",6,"Top",0,2,2,"InPlay","FB",90.9706696822732
+"Harris, Dylan","Cook, Jeremy",6,"Bottom",2,2,0,"InPlay","BB",78.2042826723045
+"Busch, Michael","Cook, Jeremy",6,"Bottom",1,1,1,"InPlay","FB",88.838084409293
+"Freeman, Ike","Veliz, Gregory",6,"Bottom",1,2,2,"InPlay","FB",94.9003578124654
+"Crosbie, Chad","Sandy, Will",7,"Top",2,2,0,"InPlay","FB",88.0540557976641
+"Lala, Jordan","Sandy, Will",7,"Top",3,1,1,"BallCalled","FB",88.2620864933352
+"Vilar, Anthony","O'Brien, Caden",7,"Top",0,1,1,"InPlay","Und",84.6898544979191
+"Roberts, Caleb","Veliz, Gregory",7,"Bottom",1,1,0,"InPlay","BB",83.7244923770793
+"Sabato, Aaron","Veliz, Gregory",7,"Bottom",1,0,1,"InPlay","BB",86.1636373303533
+"McGee, Ashton","Veliz, Gregory",7,"Bottom",1,2,1,"StrikeSwinging","BB",85.9176829989243
+"Zamora, Freddie","O'Brien, Caden",8,"Top",1,0,0,"InPlay","FB",86.9571887846664
+"Del Castillo, Adrian","O'Brien, Caden",8,"Top",0,0,0,"InPlay","CH",73.5219962247902
+"Toral, Alejandro","O'Brien, Caden",8,"Top",0,1,1,"InPlay","CH",71.3063909270414
+"Gil, Ray","O'Brien, Caden",8,"Top",0,0,2,"InPlay","CH",72.4214318045464
+"Cloonan, Dylan","O'Brien, Caden",8,"Top",2,2,2,"StrikeSwinging","FB",90.6948462799389
+"Serretti, Danny","Veliz, Gregory",8,"Bottom",1,2,0,"InPlay","CH",80.5583687420936
+"Martorano, Brandon","Veliz, Gregory",8,"Bottom",0,0,1,"InPlay","FB",92.8465833573367
+"Harris, Dylan","Veliz, Gregory",8,"Bottom",3,2,1,"InPlay","CH",81.093556716321
+"Busch, Michael","Veliz, Gregory",8,"Bottom",3,1,1,"BallIntentional","Und",NA
+"Freeman, Ike","Veliz, Gregory",8,"Bottom",0,1,1,"InPlay","FB",92.0632756321922
+"Roberts, Caleb","Veliz, Gregory",8,"Bottom",3,0,2,"BallIntentional","Und",NA
+"Enwiller, Dylan","Veliz, Gregory",8,"Bottom",2,2,2,"StrikeSwinging","BB",84.9954103579873
+"Paige, Tyler","O'Brien, Caden",9,"Top",1,2,0,"StrikeSwinging","FB",93.0805658746096
+"Gates, Jonathan","Love, Austin",9,"Top",0,2,1,"InPlay","FB",92.8404397652036
+"Lala, Jordan","Love, Austin",9,"Top",3,2,2,"InPlay","FB",94.2526993715902

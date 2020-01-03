@@ -1,0 +1,493 @@
+---
+output: html_document
+  # flexdashboard::flex_dashboard:
+  #   orientation: columns
+  #   vertical_layout: fill
+css: www/style.css
+
+params:
+  game:
+    value: x
+  teams: c("NOR_TAR", "NOR_TAR2")
+  allplayers:
+    value: x
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F, out.width = "100%")
+
+## elite release point consistency
+
+# change date
+
+  # background-color: white;
+  # background-image: url("Bosh CF View.jpeg");
+  # box-shadow: inset 0 0 0 600px rgba(225,225,225,0.7);
+  
+  source("global.R")
+
+  cols <- c("purple", "red", "orange", "dodgerblue", "pink", "forestgreen")
+  
+  if(F){#sum(is.element(params$teams, c("NOR_TAR", "NOR_TAR2"))) > 0){
+    load("data/uncall.RData")
+    alldata <- pitchtagging(data[which(data$PitcherTeam %in% c('NOR_TAR', 'NOR_TAR2') & game$Pitcher %in% pitchers),])
+  }
+  
+  #data <- params$data
+  #pitcher <- params$pitcher
+  #data <- pitch.tagging2(data)
+  pitcher <- mode(params$game$Pitcher)
+  gamedate <- mode(game$Date)
+  game <- params$game
+```
+
+---
+title: `r paste(pitcher, "Game Report", gamedate)`
+---
+
+
+<br>
+<br>
+<br>
+<br>
+
+
+<h3>Strikes</h3>
+
+
+<!-- ================================ -->
+
+
+```{r cera}
+
+```
+
+```{r pitchlocs, eval=T}
+# renderPlotly({
+par(mar = c(.5, .5, .8, .5))
+
+loc.dat <- plot.pitches.gg(data = game, returndata = T, tag.pitches = F)
+
+loc.dat$key <- paste("Inning", loc.dat$Inning, "-", loc.dat$Batter)
+loc.dat$PitchCall <- gsub(gsub(gsub(gsub(gsub(loc.dat$PitchCall, pattern = "HomeRun", replacement = "Home Run"), pattern = "HitByPitch", replacement = "Hit By Pitch"), pattern = "FoulBall", replacement = "Foul"), pattern = "BallCalled", replacement = "Ball"), pattern = "([A-Z][a-z]+)([A-Z][a-z]+)", replacement = "\\2 \\1")
+
+loc.dat$ExpCalledStrike <- ""
+loc.dat <- apply.exp.called.strike(loc.dat)
+
+gmL <- SharedData$new(loc.dat[which(loc.dat$BatterSide == "Left"),], group = "Pick an at-bat - Left Handed")
+gmR <- SharedData$new(loc.dat[which(loc.dat$BatterSide == "Right"),], group = "Pick an at-bat - Right Handed")
+# gm <- SharedData$new(loc.dat)
+# filter_select(id = "ab", label = "Pick an at-bat", group = "Pick an at-bat", sharedData = gm)
+
+real.strikezone <- read.csv(file = "data/Real Strike Zone.csv", stringsAsFactors = F)
+#applybbexpoutcomes
+
+show.strikezone = T
+show.real.strikezone = T
+shape.type = "pitchtype"
+type = "PlateLoc"
+bside = "Left"
+lefty <- mode(game$BatterSide) == "Left"
+p.view = T
+dragmode = "pan"
+fixaxes = T
+
+other.real.strikezone <- real.strikezone[which(real.strikezone$BatterSide != bside), c("PlateLocSide", "PlateLocHeight")]
+real.strikezone <- real.strikezone[which(real.strikezone$BatterSide == bside), c("PlateLocSide", "PlateLocHeight")]
+
+
+pitchtype.shapes <- c("FB" = 16, "FT" = 16, "FC" = 18, "FS" = 16, "CH" = 15, "SL" = 18, "CU" = 17, "BB" = 17)
+
+lhb.pic <- readPNG("data/LHB P View Real Zone.png")#readPNG("data/LHB Catcher View.png")
+rhb.pic <- readPNG("data/RHB P View Real Zone.png")#readPNG("data/RHB Catcher View.png")
+  
+
+if(nrow(gmL$origData()) > 0){    
+ ggplotly(ggplot(gmL, aes(PlateLocSide, PlateLocHeight, text = paste("Result:", PitchCall,#key = key
+                                                                               "<br>Pitch:", TaggedPitchType,
+                                                                               "<br>Count:", paste(Balls, Strikes, sep = "-"),
+                                                                     "<br>Called Strike Prob:", ifelse(is.na(Exp.Called.Strike), "Unknown", paste(round(pmax(0, pmin(100, 100 * Exp.Called.Strike))), "%")),
+                                                                               "<br>Date:", Date,
+                                                                               "<br>Batter:", Batter,
+                                                                               "<br>Inning:", Inning))) +
+    geom_point(aes(colour = factor(PitchCall), shape = factor(TaggedPitchType), key = key), size = 3.5) +
+    
+    scale_color_manual(name = "Pitch Result, Type", values = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "Error" = "blue", "Sacrifice" = "blue", "InPlay" = "blue", "Ball" = "forestgreen", "BallIntentional" = "forestgreen", "Called Strike" = "red", "Swinging Strike" = "darkred", "Foul" = "darkred", "Hit By Pitch" = "black",  "Undefined" = 'white')) +
+    {if(shape.type == "ABNumPCH") scale_shape_manual(values = abshapes)} +#shape == "ABNumPCH"
+    {if(shape.type == "pitchtype") scale_shape_manual(values = pitchtype.shapes)} + #shape == "pitchtype"
+    #{if(T) geom_label(aes(PlateLocSide, PlateLocHeight, label = PitchofPA, colour = 'orange', size = 0.9)) }+    
+
+    scale_x_continuous(limits = c(-3, 3), labels = NULL) +
+    scale_y_continuous(limits = c(ifelse(type == "Contact", -2, 0), 5), labels = NULL) +
+    labs(title = "", x = "", y = "", color = "Pitch Type, Result", shape = "")
+    , source = 'loc', tooltip = "text") %>%
+    
+    layout(title = "",
+           xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes), 
+           yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), 
+           images = list(
+             source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+             xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5, 
+             sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+           ), dragmode = dragmode) %>%
+   #add_annotations(text = loc.dat$PitchofPA) %>%
+ highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = F, selectize = T, inline = T)
+} else plot_ly() %>% layout(title = "No ABs vs. Left-Handed Hitters")
+
+ ### vs. RHB
+if(nrow(gmR$origData()) > 0){
+  ggplotly(ggplot(gmR, aes(PlateLocSide, PlateLocHeight, text = paste("Result:", PitchCall,#key = key
+                                                                               "<br>Pitch:", TaggedPitchType,
+                                                                               "<br>Count:", paste(Balls, Strikes, sep = "-"),
+                                                                     "<br>Called Strike Prob:", ifelse(is.na(Exp.Called.Strike), "Unknown", paste(round(pmax(0, pmin(100, 100 * Exp.Called.Strike))), "%")),
+                                                                               "<br>Date:", Date,
+                                                                               "<br>Batter:", Batter,
+                                                                               "<br>Inning:", Inning))) +
+    geom_point(aes(colour = factor(PitchCall), shape = factor(TaggedPitchType), key = key), size = 3.5) +
+    
+    scale_color_manual(name = "Pitch Result, Type", values = c("Out" = "blue", "Single" = "blue", "Double" = "blue", "Triple" = "blue", "Home Run" = "blue", "Error" = "blue", "Sacrifice" = "blue", "InPlay" = "blue", "Ball" = "forestgreen", "BallIntentional" = "forestgreen", "Called Strike" = "red", "Swinging Strike" = "darkred", "Foul" = "darkred", "Hit By Pitch" = "black",  "Undefined" = 'white')) +
+    {if(shape.type == "ABNumPCH") scale_shape_manual(values = abshapes)} +#shape == "ABNumPCH"
+    {if(shape.type == "pitchtype") scale_shape_manual(values = pitchtype.shapes)} + #shape == "pitchtype"
+    #{if(T) geom_label(aes(PlateLocSide, PlateLocHeight, label = PitchofPA, colour = 'orange', size = 0.9)) }+    
+
+    scale_x_continuous(limits = c(-3, 3), labels = NULL) +
+    scale_y_continuous(limits = c(ifelse(type == "Contact", -2, 0), 5), labels = NULL) +
+    labs(title = "", x = "", y = "", color = "Pitch Type, Result", shape = "")
+    , source = 'loc', tooltip = "text") %>%
+    
+    layout(title = "",
+           xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes), 
+           yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), 
+           images = list(
+             source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+             xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5, 
+             sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+           ), dragmode = dragmode) %>%
+   #add_annotations(text = loc.dat$PitchofPA) %>%
+ highlight(on = "plotly_click", off = "plotly_doubleclick", persistent = F, selectize = T, inline = T)
+ } else plot_ly() %>% layout(title = "No ABs vs. Left-Handed Hitters")
+ 
+ 
+ 
+  
+```
+
+
+
+```{r strikes}
+
+    overall.strike <- mean(game$Strike, na.rm = T)
+    pitch.type.strikes <- game %>%
+      filter(!is.element(TaggedPitchType, c("BallIntentional", "Undefined"))) %>%
+      dplyr::group_by(TaggedPitchType) %>%
+      dplyr::summarise(Strike = mean(Strike, na.rm = T), n = n()) %>%
+      arrange(desc(n)) %>%
+      as.data.frame()
+    
+    pts <- rbind(data.frame(TaggedPitchType = "All", Strike = overall.strike, n = nrow(game)), pitch.type.strikes)
+    count.strikes <- game %>%
+      filter(!is.element(TaggedPitchType, c("BallIntentional"))) %>%
+      group_by(Count) %>%
+      dplyr::summarise(Strike = mean(Strike, na.rm = T), n = n()) %>%
+      as.data.frame()
+    
+    rownames(count.strikes) <- count.strikes[,1]
+    count.strikes <- count.strikes[c("0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2"),]
+    
+        bp <- barplot(100 * pts[,2], names.arg = pts[,1], xlab = "Pitch Type", ylab = "Strike %", main = paste(psplit(pitcher), "Strike % by Pitch Type"), col = cols)
+    text(bp, pts[,1], labels = paste(round(pts[,"Strike"] * 100), "%\n", pts[,3], "thrown"), pos = 3, xpd = NA)
+    abline(h = c(55, 60, 65))
+
+```
+
+
+
+```{r}
+    bp2 <- barplot(100 * count.strikes[,2], names.arg = count.strikes[,1], xlab = "Count", ylab = "Strike %", main = paste(psplit(pitcher), "Strike % by Count"), col = cols)
+    text(bp2, count.strikes[,1], labels = count.strikes[,"n"], pos = 3, xpd = NA)
+    abline(h = c(55, 60, 65))
+```
+
+<br>
+<br>
+<h3>Release Point</h3>
+
+<!-- ====================================== -->
+
+```{r releasepoints, warning=F}
+releasepointgraph.ly(data1 = game) %>% 
+  layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+
+```
+
+<br>
+<br>
+
+```{r}
+releasepointgraph.ly(data1 = game, xvar = "Extension", plot.title = "") %>% 
+  layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+
+```
+
+
+
+<br>
+<h3>Velo</h3>
+<!-- =========================================== -->
+
+```{r velo, eval=T}
+
+inning.velo <- function(data, p = mode(data$Pitcher)){
+  require(ggplot2); require(plotly)
+  require(lubridate)
+  require(assertthat)
+  
+  per90 <- tibble::tribble(
+    ~PitcherThrows, ~AutoPitchType,    ~RelSpeed,
+    "Left",           "BB", 82.979781325, 
+    "Left",           "CH",  84.26995735, 
+    "Left",           "FB",   91.1247524, 
+    "Right",           "BB", 84.315738395, 
+    "Right",           "CH",  84.20698938,  
+    "Right",           "FB", 92.826312234 
+  )
+  
+  data <- data[which(data$Pitcher == p),]
+  
+  data$Date <- gsub(x = data$Date, pattern = "/1(7|8)$", replacement = "/201\\1")
+  if(!any(grepl(x = data$Date, pattern = "-"))){
+    data$Date <- mdy(data$Date)
+  }
+
+  
+  ag <- data %>%
+    filter(!is.na(RelSpeed) & TaggedPitchType != "Undefined") %>%
+    group_by(Pitcher, TaggedPitchType, Inning) %>%
+    dplyr::summarise(AvgVelo = mean(RelSpeed), SdVelo = sd(RelSpeed), MaxVelo = max(RelSpeed)) %>%
+    mutate(Lower = AvgVelo - SdVelo, Upper = AvgVelo + SdVelo) %>%
+    mutate_if(is.numeric, funs(round(., digits = 1)))
+  
+  per90 <- cbind(per90[which(per90$PitcherThrows == mode(data$PitcherThrows) & per90$AutoPitchType == "FB"),], Inning = min(ag$Inning, na.rm = T))
+  
+  g <- ggplot(data = ag, aes(Inning, AvgVelo,
+      text = paste(TaggedPitchType,
+                   "<br>Avg:", AvgVelo,
+                   "<br>Inning:", Inning,
+                   "<br>Max", MaxVelo,
+                   "<br>Range:", paste(Lower, Upper, sep = " - ")))) +
+      geom_point(aes(y = AvgVelo, color = TaggedPitchType)) +
+      geom_ribbon(aes(x = Inning, ymin = Lower, ymax = Upper, colour = TaggedPitchType)) +#, color = "grey50"
+      geom_line(aes(y = AvgVelo)) +
+      geom_point(mapping = aes(Inning, MaxVelo, color = "Max"), data = function(x)x[which(x$TaggedPitchType == "FB"),]) +
+      geom_hline(aes(yintercept = RelSpeed),  data = per90, linetype = "dashed", color = "black", show.legend = F) +
+      labs(xlab = "Inning", ylab = "Velo", title = paste(p, "Velo by Inning", sep = " - ")) +
+      scale_y_continuous(limits = c(70,100)) +
+#      scale_x_continuous(labels = function(x) format(x, "%d-%b")) +
+      #facet_wrap( ~ Pitcher, ncol = 4) +
+      scale_colour_discrete(name = "Velo Type") +
+      theme(legend.position = "bottom") +
+      ggtitle("Velo by Inning")
+  g <- g + geom_text(aes(x = Inning + .25, y = RelSpeed + 1, label = paste(ifelse(AutoPitchType == "BB", "\n\n", ""), "Elite", AutoPitchType)), data = per90, show.legend = F, inherit.aes = F)
+
+    gg <- ggplotly(g, tooltip = "text", source = 'velo') #%>% add_segments(x = as.Date("2018-02-18"), y = 92.8, yend = 92.8, xend = as.Date("2018-06-28"))
+    
+
+  return(gg)
+  
+}
+
+
+
+
+    #### VELO BY INNING   #######
+    # velo.by.inning <- game %>%
+    #   dplyr::filter(!is.element(TaggedPitchType, c("BallIntentional", "Undefined"))) %>%
+    #   dplyr::group_by(Inning, TaggedPitchType) %>%
+    #   dplyr::summarise(RelSpeed = mean(RelSpeed, na.rm = T)) %>%
+    #   dplyr::arrange(Inning, desc(RelSpeed)) %>%
+    #   as.data.frame()
+  pitches <- game %>% filter(!is.element(TaggedPitchType, c("BallIntentional", "Undefined"))) %>% unique()
+
+    # plot(0, 0, type = "n", xlim = c(1, max(velo.by.inning$Inning)), xlab = "Inning", ylab = "Velo (mph)", ylim = c(60, 100), main = paste(psplit(pitcher), "Velo by Inning"))
+    pitch.color <- data.frame(TaggedPitchType = "Undefined", PitchColor = "black")
+    colind <- 1
+    for(pitch in unique(pitches)){
+      # points(velo.by.inning[which(velo.by.inning$TaggedPitchType == pitch),c("Inning", "RelSpeed")], type = "o", col = cols[colind], pch = 16)
+      pitch.color <- rbind(pitch.color, data.frame(TaggedPitchType = pitch, PitchColor = cols[colind]))
+      colind <- colind + 1
+    }
+
+    # firstinn <- velo.by.inning[which(velo.by.inning$Inning == min(velo.by.inning$Inning)),]
+    # lastinn <- velo.by.inning[which(velo.by.inning$Inning == max(velo.by.inning$Inning)),]
+    # 
+    # max.vel <- game[which.max(game$RelSpeed),]
+    # 
+    # points(max.vel$Inning, max.vel$RelSpeed, pch = 4, col = "pink")
+    # 
+    # text(lastinn$Inning - .3, lastinn$RelSpeed, round(lastinn$RelSpeed, digits = 1), pos = 3)
+    # if(mode(firstinn$Inning) != mode(lastinn$Inning)){
+    #   text(firstinn$Inning + .1, firstinn$RelSpeed, round(firstinn$RelSpeed, digits = 1), pos = 3)
+    # }
+    # 
+    # 
+    # text(max.vel$Inning, max.vel$RelSpeed, round(max.vel$RelSpeed, digits = 1), pos = 3)
+    # 
+    # legend("bottomleft", legend = c(as.character(pitch.color[c(2:nrow(pitch.color)), "TaggedPitchType"]), "Max Velo"), col = as.character(c(pitch.color[c(2:nrow(pitch.color)), "PitchColor"]), "pink"), pch = c(rep(16, nrow(pitch.color) - 1), 4), pt.cex = 0.8, cex = 0.5)
+inning.velo(data = game) %>% layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+    
+```
+
+
+
+<br>
+<h3>Movement</h3>
+
+<!-- ========================= -->
+```{r movement}
+movement.plot(data = game) %>% layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+```
+
+<!-- ======================= -->
+
+<br>
+<h3>Strikeouts</h3>
+```{r strikeouts, eval=T}
+#if(sum(game$KorBB == "Strikeout") > 0) plot.pitches.gg(data = game[which(game$KorBB == "Strikeout"),], fixaxes = T) else {plot_ly() %>% layout(title = "No Strikeouts")}
+if(any(game$KorBB == "Strikeout" & game$BatterSide == "Left")) plot.pitches(data = game[which(game$KorBB == "Strikeout" & game$BatterSide == "Left"),], legend.cex = .6, plot.title = "Strikeouts vs. LHB", pitch.numbers = F, p.view = T) else {plot_ly() %>% layout(title = "No Strikeouts vs. LHB")}
+
+if(any(game$KorBB == "Strikeout" & game$BatterSide == "Right")) plot.pitches(data = game[which(game$KorBB == "Strikeout" & game$BatterSide == "Right"),], legend.cex = .6, plot.title = "Strikeouts vs. RHB", pitch.numbers = F, p.view = T) else {plot_ly() %>% layout(title = "No Strikeouts vs. RHB")}
+
+```
+
+
+<br>
+<h3>Extra Base Hits</h3>
+```{r xbhs, eval=T}
+# p <- if(sum(game$PlayResult %in% c("Double", "Triple", "HomeRun")) > 0) plot.pitches.gg(data = game[which(game$PlayResult %in% c("Double", "Triple", "HomeRun")),], dragmode = "select") else plot_ly() %>% layout(title = "No Extra Base Hits") 
+# p %>% layout(xaxis = list(fixedrange = T), yaxis = list(fixedrange = T))
+
+if(any(game$PlayResult %in% c("Double", "Triple", "HomeRun") & game$BatterSide == "Left")){
+  plot.pitches(data = game[which(game$PlayResult %in% c("Double", "Triple", "HomeRun") & game$BatterSide == "Left"),], legend.cex = .6, plot.title = "Extra Base Hits vs. LHB", pitch.numbers = F, p.view = T)
+  } else{
+    plot_ly() %>% layout(title = "No Extra Base Hits vs. LHB", xaxis = list(fixedrange = T), yaxis = list(fixedrange = T)) 
+  }
+
+
+if(any(game$PlayResult %in% c("Double", "Triple", "HomeRun") & game$BatterSide == "Right")){
+  plot.pitches(data = game[which(game$PlayResult %in% c("Double", "Triple", "HomeRun") & game$BatterSide == "Right"),], legend.cex = .6, plot.title = "Extra Base Hits vs. RHB", pitch.numbers = F, p.view = T)
+  } else {
+    plot_ly() %>% layout(title = "No Extra Base Hits vs. RHB", xaxis = list(fixedrange = T), yaxis = list(fixedrange = T)) 
+  }
+
+
+```
+
+
+
+<!-- =================================== -->
+<br>
+<br>
+<h3>Pace / Rhythm</h3>
+
+```{r}
+    ####  Pace/Rhythm   ####
+    game <- game[order(game$PitchNo, decreasing = F),]
+    game <- cbind(game, PitchCount = c(1:nrow(game)))
+    new.inning <- game %>%
+      group_by(Inning) %>%
+      summarise(PitchNo = min(PitchNo, na.rm = T)) %>%
+      as.data.frame()
+    
+    if(length(which(!is.na(game$TimeElapsed))) > 5){
+      scatter.smooth(game$PitchCount, game$TimeElapsed, ylim = c(0, 60), lpars = list(col = "red"), xlab = "Pitch Count", ylab = "Seconds Between Pitches", main = paste(psplit(pitcher), "Pace/Rhythm"))
+    } else{
+      plot(game$PitchCount, game$TimeElapsed, ylim = c(0, 60), xlab = "Pitch Count", ylab = "Seconds Between Pitches", main = paste(psplit(pitcher), "Pace/Rhythm"))
+    }
+    
+    new.inn <- game[which(game$PitchNo %in% new.inning$PitchNo), "PitchCount"]
+    abline(v = new.inn, col = "blue")
+    text(new.inn + 5, 50, paste("Inning:", c(1:length(new.inn))), col = "blue")
+```
+
+
+```{r allpitchlocs}
+
+
+```
+
+<style>
+body {
+  background-color: lightblue;
+}
+.dropbtn {
+    background-color: #3498DB;
+    color: white;
+    padding: 16px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+}
+
+.dropbtn:hover, .dropbtn:focus {
+    background-color: #2980B9;
+}
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f1f1f1;
+    min-width: 160px;
+    overflow: auto;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
+.dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown a:hover {background-color: #ddd;}
+
+.show {display: block;}
+</style>
+
+<script>
+/* When the user clicks on the button, 
+toggle between hiding and showing the dropdown content */
+function myFunction() {
+    document.getElementById('myDropdown').classList.toggle('show');
+}
+
+// Close the dropdown if the user clicks outside of it
+window.onclick = function(event) {
+  if (!event.target.matches('.dropbtn')) {
+
+    var dropdowns = document.getElementsByClassName('dropdown-content');
+    var i;
+    for (i = 0; i < dropdowns.length; i++) {
+      var openDropdown = dropdowns[i];
+      if (openDropdown.classList.contains('show')) {
+        openDropdown.classList.remove('show');
+      }
+    }
+  }
+}
+</script>
+
+```{r styleandchange, results="asis"}
+
+cat(c(paste(change.date.drop(player = pitcher, pos = "Pitcher"), collapse = "\n"),
+#rep("<br>", 1),
+paste(change.player.drop(thedate = gsub(pattern = "/", replacement = "-", gamedate), players = sort(params$allplayers), pos = "Pitcher"), collapse = "\n"), rep("<br>", 2)))
+
+```

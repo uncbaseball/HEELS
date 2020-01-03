@@ -1,0 +1,175 @@
+---
+title: "Launch Angle/Exit Velo Page"
+output: html_document
+params:
+  bdat:
+    value: x
+css: www/style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F)
+source("global.R")
+require(kableExtra)
+## rendered from launch.angle.page fxn in GenerateBPBreakdown.R
+## data should only have one batter and should include only non-NA ContactType and PlayResult
+
+```
+
+```{r out.width="100%"}
+bdat <- params$bdat %>% filter(PlayResult != "Undefined" & PitchCall == "InPlay")
+
+par(mfrow = c(1,length(unique(bdat$BatterSide))), mar = c(1,1,1,1))
+#graphics::layout(matrix(c(1, 1, 1, 2), nrow = 1, ncol = 4))
+
+laev.visual(data = bdat, batter = batter, game = F, pitch.number = F)
+
+```
+
+<script>
+function showhidefxn(element_id) {
+  var x = document.getElementById(element_id);
+  if(x.style.display === "none") {
+    x.style.display = "block";
+  } else{
+    x.style.display = "none"
+  }
+}
+function close_window() {
+  if (confirm("Close Window?")) {
+    close();
+  }
+}
+
+
+</script>
+<!-- <a href="javascript:window.open('','_self').close();">close</a> -->
+<button onclick="showhidefxn('whycare')" style='background-color: blue; font-size: 2rem; color: white;'>Remind me why I care</button>
+<br>
+<div id="whycare" style='display: none;'>
+<p>
+<b>Launch Angle</b> and <b>Exit Velo</b> tell you how well you hit a ball
+
+<b>Launch Angle</b> tells you how high you hit it (groundball/line drive/fly ball)
+
+<b>Exit Velo</b> tells you how hard you hit it
+
+Together they can tell if the ball's likely to fall in for a hit, get over the fence, and so on
+
+<!-- The only other difference-makers are  -->
+<!-- 1. where you hit it (down the line/up the middle/6 hole) -->
+<!-- 2. where the fielders are positioned -->
+
+Basically they tell you what your good contact looks like and what your bad contact looks like. The goal of course is to turn bad contact into good contact.
+
+
+There are categories that have similar results. They're listed below from best (top 3) to worst (bottom 3)
+
+<br>
+</p>
+</div>
+
+```{r}
+
+group.avg.slg <- tibble("Contact Type" = c("Barrel", "Solid", "Flares & Burners", "Topped", "Under", "Weak"), 
+                        "Hit..." = c("Perfect", "Great", "High & Soft or Low & Hard", "Too Low", "Too High", "Too Soft"),
+                        "Batting Avg" = round3(c(.74, .6, .71, .26, .2, .1)), 
+                        `Slugging %` = round3(c(.68 * 4 + 2.2 * .06, .35 * 4 + .25 * 2.2, .57 + .14 * 2.2, .24 + .02 * 2.2, .11 + .07 * 2.2 + .02 * 4, .180)),
+                        Description = c("crushed, mostly home runs, some flyouts (probably to center)", "also crushed but less, home run/double/flyout in corner/gaps/center", "mostly singles, rocket groundballs and flares/texas leaguers that just clear the infield", "groundouts, both routine and rollovers", "flyouts, both routine and popouts", "dribbler, probably won't pass the mound, often a check swing"))
+
+kable(group.avg.slg) %>% kable_styling() %>% 
+  column_spec(1, width = "15em", bold = T) %>% 
+  column_spec(2, width = "15em", bold = T) %>% 
+  column_spec(3, width = "12em", bold = T) %>% 
+  column_spec(4, width = "10em", bold = T) %>% 
+  column_spec(5, width = "65em") %>%
+  row_spec(0, font_size = 16) %>%
+  row_spec(1, background = "red") %>%
+  row_spec(2, background = "pink") %>% 
+  row_spec(3, background = "orange") %>% 
+  row_spec(4, background = "green", color = "white") %>% 
+  row_spec(5, background = "blue", color = "white") %>%
+  row_spec(6, background = "yellow")
+
+
+
+#bdat <- read.csv(file = "Scrimmage Data.csv", stringsAsFactors = F)
+```
+
+<!-- ### Go on -->
+<!-- The tan area (WEAK) are weakly hit -- under 60 mph, you're check-swinging or barely getting a piece. If you have a lot in that area you're probably getting fooled a lot and should work on that -->
+
+<!-- Most bad contact is either  -->
+
+<!-- <b>Topped</b> -- meaning you hit over top of it/groundout/rollover it -->
+
+<!-- or <b>Under</b> -- meaning you hit under it/fly out/pop it up -->
+
+<!-- This page tells you how you're mishitting the ball. The hard part (fixing it) is your job. The coaches and I can suggest drills or mechanics to focus on.  -->
+
+<!-- One of the best ways to work on it, as simple as it sounds, is to try to hit the ball lower or higher and pick some kind of target. Some guys like trying to hit the top of the ball when they're under it or the bottom of the ball when they're topping it. -->
+
+<!-- - above flares -->
+<!-- - timing vs. bat path -->
+<!-- - solid contact to barrels -->
+
+
+
+```{r out.width="80%", fig.align="left"}
+tab <- as.data.frame(table(bdat$ContactType)) %>% mutate(label = paste0(Freq, " (", percent(Freq / sum(Freq)), "%)"))
+tab <- merge(tab, as.data.frame(c("F&B" = "coral", "Solid" = "pink", "Barrel" = "red", "Topped" = "darkgreen", "Under" = "skyblue", "Weak" = "palegoldenrod")), by.x = "Var1", by.y = "row.names")
+
+
+#barplot(tab$Freq, names.arg = tab$Var1, col = tab[,4], xlab = "Contact Category", ylab = "", main = "How Many Batted-Balls in Each Category")
+  
+  ggplot(tab, aes(x = Var1, y  = Freq, label = label, fill = Var1)) +
+    geom_bar(stat = "identity") +
+    scale_fill_discrete(c("F&B" = "coral", "Solid" = "pink", "Barrel" = "red", "Topped" = "darkgreen", "Under" = "skyblue", "Weak" = "palegoldenrod")) +
+    geom_text(aes(vjust = -.7)) +
+    labs(title = "How Many Batted-Balls in Each Category", x = "Contact Group", y = "") +
+    theme(legend.position = "none", axis.text.x = element_text(size = 18, face = "bold"), axis.title.x = element_text(size = 20, face = "bold"), title = element_text(size = 19, face = "bold.italic"))
+# )
+
+knitr::asis_output("<br><br>")
+
+results <- bdat %>%
+  group_by(ContactType) %>%
+  summarise("Batting Avg" = round3(mean(Hit, na.rm = T)), "Slugging %" = round3(mean(Bases, na.rm = T)), "1B" = sum(`1B`, na.rm = T), "2B" = sum(`2B`, na.rm = T), "3B" = sum(`3B`, na.rm = T), HR = sum(`HR`, na.rm = T), Out = sum(Out, na.rm = T), Error = sum(Error, na.rm = T), Total = n()) %>%
+  plyr::rename(c("ContactType" = "Contact Type"))
+
+results <- results[order(results$Total, decreasing = T), c(1:3, 3 + which(colSums(results[,-c(1:3)]) > 0))]
+  
+
+```
+
+```{r}
+k <- kable(results) %>% kable_styling() %>% row_spec(row = 0, font_size = 16)
+for(row in c(1:nrow(results))){
+  ctype <- results$`Contact Type`[row]
+  k <- row_spec(k, row = row, background = ifelse(ctype == "Barrel", "red", 
+                                     ifelse(ctype == "Solid", "pink", 
+                                            ifelse(ctype == "F&B", "orange", 
+                                                   ifelse(ctype == "Topped", "green", 
+                                                          ifelse(ctype == "Under", "blue", 
+                                                                 ifelse(ctype == "Weak", "yellow", "")))))),
+                      color = ifelse(ctype %in% c("Under", "Topped"), "white", "black"))
+}
+for(col in c(1:ncol(results))) k <- column_spec(k, column = col, bold = T, width = ifelse(col <= 3, "7em", "4em"))
+k
+```
+
+
+```{r}
+ 
+
+  bscols(spraychart(bdat, color = "ContactType", shape = "PlayResult") %>% layout(legend = list(borderwidth = 12)), widths = 12)
+  
+    
+    ## target range -- to add 50 pts to slg
+    
+    ## show whole team and previous seasons ADD THEM TO YOUR BARGRAPH
+    
+    ## show avg exit velo, target range
+  
+
+```

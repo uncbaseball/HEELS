@@ -1,0 +1,213 @@
+---
+title: "Pitching Coach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F)
+
+require(dplyr)
+require(magrittr)
+require(DT)
+require(plotly)
+require(tidyr)
+
+default::default(datatable) <- list(filter = "top")
+
+percent <- function(x, digits = 0) round(100 * x, digits = digits)
+
+roster <- read.csv(file = "roster.csv", stringsAsFactors = F) %>%
+  mutate(InitialsNumber = paste(gsub(Name, pattern = "([A-Z])[a-z]+, ([A-Z])[a-z]+", replacement = "\\2\\1"), Num))
+data9 <- read.csv(file = "data/uncall.csv", stringsAsFactors = F) 
+pdata9 <- data9 %>% filter(PitcherTeam == "NOR_TAR" & PitchCall != "Undefined" & !is.element(Pitcher, c("Casparius, Ben", "Dalatri, Luca"))) %>% mutate(k2 = as.logical(Strikes == 2))
+last.outing.dates <- pdata9 %>% group_by(Pitcher) %>% summarise(recent.yyyymmdd = max(yyyymmdd, na.rm = T))
+last.outing <- pdata9 %>% left_join(., last.outing.dates, by = c("Pitcher")) %>%
+  mutate(Is_Last_Outing = as.logical(yyyymmdd == recent.yyyymmdd)) %>%
+  filter(Is_Last_Outing) %>%
+  select(-recent.yyyymmdd)
+```
+
+<style>
+body {
+  background-image: url('www/Bosh CF View.jpeg');
+  box-shadow: inset 0 0 0 1000px rgba(255,255,255,.7);
+  margin: 0; 
+}
+
+h1 {
+  color: blue;
+  text-align: center;
+}
+
+h2 {
+  color: hotpink;
+  text-align: center;
+}
+</style>
+
+```{r}
+htmltools::tags$button(style = "background-color: green;", htmltools::tags$a(href = "../pitchers.html", "Choose a Pitcher's Page", style = "size: 36px; color: white;"))
+```
+
+
+### Exit Velo for UNC and Opponents by Game
+```{r exitvelocomp}
+datatable(read.csv(file = "data/UNC vs. Opp Avg Exit Velo by Game.csv", stringsAsFactors = F), rownames = F,
+          colnames = c("Game", "UNC Avg Exit Velo", "Opponent Avg Exit Velo"))
+```
+
+## Leaderboard
+```{r leaderboard}
+
+datatable(pdata9 %>% mutate(strike = as.numeric(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "InPlay")) + as.numeric(PitchCall == "FoulBall") * ifelse(Strikes == 2, 0.5, 1),
+           twoof3 = ifelse(Balls < 2 & Strikes == 1 & PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall"), 1,
+                                  ifelse(Balls == 1 & Strikes < 2 & PitchCall == "BallCalled", 0, NA_integer_)),
+           Game = gsub(Game, pattern = "Double Header", replacement = "DH")) %>%
+    group_by(Pitcher, Game) %>% summarise("Strike %" = percent(mean(strike)), 
+                                          "1st Pitch Strike %" = percent(mean(ifelse(Balls != 0 | Strikes != 0, NA_integer_, strike), na.rm = T)),
+                                          `2 of 3 Strikes` = percent(mean(twoof3, na.rm = T)),
+                                          L.I.F.E = round(max(RelSpeed, na.rm = T), digits = 1), 
+                                          Whiffs = sum(PitchCall == "StrikeSwinging"),
+                                          Kills = sum(Balls < 2 & Strikes == 2 & (PitchCall %in% c("StrikeCalled", "StrikeSwinging") | PlayResult %in% c("Out", "FieldersChoice"))),
+                                          `Avg Exit Velo` = round(mean(ExitSpeed * ifelse(InPlay, 1, NA_integer_), na.rm = T)),
+                                          `Popups and Rollovers` = sum(InPlay & ((Angle < -10 | Angle > 35) | (is.na(Angle) & PlayResult == "Out" & HitType != "LineDrive")), na.rm = T)
+                                          ), rownames = F) 
+
+```
+
+## Overall Strike %
+```{r strikes}
+##  Season
+datatable(pdata9 %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher) %>% 
+  summarise(`Strike%` = percent(mean(as.numeric(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay")) - 
+                                       0.5 * as.numeric(PitchCall == "FoulBall" & Strikes == 2), na.rm = T)),
+            `Whiff%` = percent(mean(PitchCall == "StrikeSwinging", na.rm = T)), 
+            `Called Strike%` = percent(mean(PitchCall == "StrikeCalled", na.rm = T)), `Hard Hit` = sum((Pred_2B + Pred_3B + Pred_HR) > 0.5, na.rm = T), "Total Num Thrown" = n()), rownames = F)
+```
+
+### Game-by-Game
+```{r}
+datatable(pdata9 %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher, Game) %>% 
+  summarise(`Strike%` = percent(mean(as.numeric(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay")) - 
+                                       0.5 * as.numeric(PitchCall == "FoulBall" & Strikes == 2), na.rm = T)),
+            `Whiff%` = percent(mean(PitchCall == "StrikeSwinging", na.rm = T)), 
+            `Called Strike%` = percent(mean(PitchCall == "StrikeCalled", na.rm = T)), `Hard Hit` = sum((Pred_2B + Pred_3B + Pred_HR) > 0.5, na.rm = T), "Total Num Thrown" = n()), rownames = F)
+```
+
+## Strike %s by Pitch Type
+```{r strikesbypitch}
+##  Season
+datatable(pdata9 %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher, TaggedPitchType) %>% 
+  summarise(`Strike%` = percent(mean(as.numeric(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay")) - 
+                                       0.5 * as.numeric(PitchCall == "FoulBall" & Strikes == 2), na.rm = T)),
+            `Whiff%` = percent(mean(PitchCall == "StrikeSwinging", na.rm = T)), 
+            `Called Strike%` = percent(mean(PitchCall == "StrikeCalled", na.rm = T)), `Hard Hit` = sum((Pred_2B + Pred_3B + Pred_HR) > 0.5, na.rm = T), "Total Num Thrown" = n()), rownames = F)
+```
+
+###  Game-by-Game
+```{r}
+datatable(pdata9 %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher, Game, TaggedPitchType) %>% 
+  summarise(`Strike%` = percent(mean(as.numeric(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay")) - 
+                                       0.5 * as.numeric(PitchCall == "FoulBall" & Strikes == 2), na.rm = T)),
+            `Whiff%` = percent(mean(PitchCall == "StrikeSwinging", na.rm = T)), 
+            `Called Strike%` = percent(mean(PitchCall == "StrikeCalled", na.rm = T)), `Hard Hit` = sum((Pred_2B + Pred_3B + Pred_HR) > 0.5, na.rm = T), "Total Num Thrown" = n()), rownames = F)
+
+
+```
+
+```{r eval = F}
+### Walks and Extra-Base Hits
+bb_xbh <- pdata9 %>% group_by(Pitcher, k2) %>% 
+  summarise(PctWalks = sum(BB, na.rm = T) / sum(AB_End, na.rm = T) * 9, 
+            PctXBH = (sum(X2B, na.rm = T) + sum(X3B, na.rm = T) + sum(HR, na.rm = T)) / sum(AB_End, na.rm = T) * 9, 
+            Avg = sum(Hit, na.rm = T) / sum(AB_End, na.rm = T) * 9,
+            StrikePct = 100 * mean(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))) %>% as.data.frame()
+
+
+plot(bb_xbh[which(!bb_xbh$k2), "PctWalks"], bb_xbh[which(!bb_xbh$k2), "PctXBH"], type = "n", ylab = "Extra-Base Hits", xlab = "Walks",
+     main = "Extra Base Hits vs. Walks with 0/1 Strike\nPer Time Thru the Order", xlim = c(0, 2), ylim = c(0, 2))
+text(bb_xbh[which(!bb_xbh$k2), "PctWalks"], bb_xbh[which(!bb_xbh$k2), "PctXBH"], labels = sapply(bb_xbh[which(!bb_xbh$k2), "Pitcher"], psplit))
+abline(a = 0, b = 1 / 2.1)
+
+
+plot(bb_xbh[which(bb_xbh$k2), "PctWalks"], bb_xbh[which(bb_xbh$k2), "Avg"], type = "n", ylab = "Hits", xlab = "Walks",
+     main = "Hits vs. Walks with 2 Strikes\nPer Time Thru the Order", xlim = c(0, 2), ylim = c(0, 2))
+text(bb_xbh[which(bb_xbh$k2), "PctWalks"], bb_xbh[which(bb_xbh$k2), "Avg"], labels = sapply(bb_xbh[which(bb_xbh$k2), "Pitcher"], psplit))
+abline(a = 0, b = 2 / 3)
+
+
+```
+
+
+## Average Velo
+```{r}
+velo_ag <- pdata9 %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher, TaggedPitchType) %>% 
+  summarise(Avg_Velo = round(mean(RelSpeed, na.rm = T), digits = 1), sd_velo = sd(RelSpeed, na.rm = T), Number_Thrown = n()) %>%
+  mutate(Velo_Range = paste(round(Avg_Velo - sd_velo), round(Avg_Velo + sd_velo), sep = "-"), Outing = "All", descrip = paste("Pitcher:", Pitcher, "<br>Pitch:", TaggedPitchType, "<br>Avg Velo:", Avg_Velo, "<br>Range:", Velo_Range, "<br># Thrown:", Number_Thrown, "<br>All Games")) %>%
+  left_join(., roster %>% select(Name, InitialsNumber), by = c("Pitcher" = "Name"))
+
+last_velo_ag <- last.outing %>% filter(TaggedPitchType != "Undefined") %>% group_by(Pitcher, TaggedPitchType) %>% 
+  summarise(Avg_Velo = round(mean(RelSpeed, na.rm = T), digits = 1), sd_velo = sd(RelSpeed, na.rm = T), Number_Thrown = n()) %>%
+  mutate(Velo_Range = paste(round(Avg_Velo - sd_velo), round(Avg_Velo + sd_velo), sep = "-"), Outing = "Most Recent", descrip = paste("Pitcher:", Pitcher, "<br>Pitch:", TaggedPitchType, "<br>Avg Velo:", Avg_Velo, "<br>Range:", Velo_Range, "<br># Thrown:", Number_Thrown, "<br>Most Recent Outing")) %>%
+  left_join(., roster %>% select(Name, InitialsNumber), by = c("Pitcher" = "Name"))
+
+
+
+plot_ly(data = rbind(velo_ag, last_velo_ag), x = ~Pitcher, y = ~Avg_Velo, color = ~TaggedPitchType, symbol = ~Outing, hovertext = ~descrip) %>%
+  add_markers(hoverinfo = "text")
+
+```
+
+
+## Avg Movement
+```{r}
+
+move.ag <- pdata9 %>%
+  group_by(Pitcher, TaggedPitchType) %>% 
+  summarise(HorzBreak = round(mean(HorzBreak, na.rm = T), digits = 1), InducedVertBreak = round(mean(InducedVertBreak, na.rm = T), digits = 1)) %>%
+  left_join(., roster %>% select(Name, InitialsNumber), by = c("Pitcher" = "Name")) %>%
+  mutate(From = "All 2019")
+
+
+last.move.ag <- last.outing %>%
+  group_by(Pitcher, TaggedPitchType) %>% 
+  summarise(HorzBreak = round(mean(HorzBreak, na.rm = T), digits = 1), InducedVertBreak = round(mean(InducedVertBreak, na.rm = T), digits = 1)) %>%
+  left_join(., roster %>% select(Name, InitialsNumber), by = c("Pitcher" = "Name")) %>%
+  mutate(From = "Last Outing")
+
+both.move.ag <- rbind(move.ag, last.move.ag)
+
+plot_ly(both.move.ag, x = ~HorzBreak, y = ~InducedVertBreak) %>%
+  filter(TaggedPitchType == "FB") %>%
+  add_markers(marker = list(size = 50), hovertext = ~Pitcher, color = ~From) %>%
+  add_annotations(text = ~InitialsNumber, showarrow = F, showlegend = T) %>%
+  layout(title = "<b>Fastballs", xaxis = list(title = "<b>Horizontal Movement (inches)"), yaxis = list(title = "<b>Vertical Movement (inches)"))
+
+plot_ly(both.move.ag, x = ~HorzBreak, y = ~InducedVertBreak) %>%
+  filter(TaggedPitchType == "CH") %>%
+  add_markers(marker = list(size = 50), hovertext = ~Pitcher, color = ~From) %>%
+  add_annotations(text = ~InitialsNumber, showarrow = F) %>%
+  layout(title = "<b>Changeups", xaxis = list(title = "<b>Horizontal Movement (inches)"), yaxis = list(title = "<b>Vertical Movement (inches)"))
+
+plot_ly(both.move.ag, x = ~HorzBreak, y = ~InducedVertBreak) %>%
+  filter(TaggedPitchType %in% c("SL", "CU")) %>%
+  add_markers(marker = list(size = 50), hovertext = ~Pitcher, color = ~From) %>%
+  add_annotations(text = ~InitialsNumber, showarrow = F) %>%
+  layout(title = "<b>Breaking Balls", xaxis = list(title = "<b>Horizontal Movement (inches)"), yaxis = list(title = "<b>Vertical Movement (inches)"))
+
+
+```
+
+
+```{r}
+data9 %>% filter(PitchCall %in% c("StrikeCalled", "BallCalled")) %>%
+  group_by(Game, PitcherTeam) %>%
+  summarise(`Strikes Added` = sum(PitchCall == "StrikeCalled" & Exp.Called.Strike < 0.6, na.rm = T) - sum(PitchCall == "BallCalled" & Exp.Called.Strike > 0.4, na.rm = T)) %>%
+  mutate(PitcherTeam = ifelse(PitcherTeam == "NOR_TAR", "UNC", "Opponent")) %>%
+  spread(PitcherTeam, `Strikes Added`) %>%
+  select(Game, UNC, Opponent) %>%
+  mutate(`Link to Chart` = paste0("<a href = '", "https://micahdh.github.io/Catchers/", gsub(Game, pattern = "/", replacement = "-"), ".pdf'>Click Here</a>")) %>%
+  datatable(escape = F)
+
+```
+

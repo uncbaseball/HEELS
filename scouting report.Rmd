@@ -1,0 +1,179 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+library(crosstalk)
+```
+
+```{r prep}
+source("global.R")
+pic <- readPNG("data/Bosh Overhead Cropped on Home Plate.png")
+  lhb.pic <- readPNG("data/LHB Real Zone.png")#readPNG("data/LHB Catcher View.png")
+  rhb.pic <- readPNG("data/RHB Real Zone.png")#readPNG("data/RHB Catcher View.png")
+
+
+  load("data/uncall.RData")
+  
+scrims <- tag.with.df(slide.trackman.columns(read.csv(file = "/users/micahdaley-harris/desktop/tar/chillmedia/scrimmage data.csv", stringsAsFactors = F)))  %>%
+  rbind.fill(data) %>%
+  filter(BatterTeam %in% c("NOR_TAR", "NOR_TAR2")) %>%
+  mutate(XLand = c(cos((90 - Bearing) * pi / 180) * ifelse(Distance > 20, Distance, 20 + rnorm(n = 1, mean = 5))), 
+         YLand = c(sin((90 - Bearing) * pi / 180) * ifelse(Distance > 20, Distance, 20 + rnorm(n = 1, mean = 5))), 
+         XCoord = c(cos(Angle * pi / 180) * ExitSpeed) , 
+         YCoord = c(sin(Angle * pi / 180) * ExitSpeed),
+         Count_Type = ifelse(Balls == 0 & Strikes == 0, "1st Pitch", ifelse(Balls <= 1 & Strikes <= 1, "1-0/0-1/1-1", ifelse(Balls == 3 & Strikes == 2, "full", ifelse(Strikes == 2, "2 strikes", "2-0/2-1/3-0/3-1")))),
+         Pitch_Type = ifelse(TaggedPitchType %in% c("FB", "FT"), "FB", ifelse(TaggedPitchType == "CH", "CH", ifelse(TaggedPitchType %in% c("FC", "CU", "SL"), "BB", "Unknown"))),
+         AB_End = c(PitchCall %in% c("InPlay", "HitByPitch") | PlayResult != "Undefined" | KorBB %in% c("Strikeout", "Walk")),
+         AB_Result = replace(ifelse(!AB_End, "", ifelse(KorBB %in% c("Strikeout", "Walk"), KorBB, paste0(ifelse(PlayResult == "Undefined", PitchCall, PlayResult), ifelse(HitType == "Undefined", "", paste0(" (", HitType, ")"))))), !AB_End, NA),
+         AB_Num = c(1, head(1 + cumsum(AB_End), -1))) %>%
+  fill(., AB_Result, .direction = "up")
+
+```
+
+
+```{r pick}
+
+```
+---
+title: `r paste("Scouting Report")`
+---
+
+
+```{r}
+
+## tabs?
+
+#crosstalk::filter_select()
+
+
+# dat <- SharedData$new(scrims[which(scrims$Batter == batter),], key = ~PitchUID, "Player")
+# 
+# ip <- SharedData$new(scrims[which(scrims$Batter == batter & scrims$PitchCall == "InPlay"),], key = ~PitchUID, "Player")
+# 
+# takes <- SharedData$new(scrims[which(scrims$Batter == batter & scrims$PitchCall %in% c("BallCalled", "StrikeCalled")),], key = ~PitchUID, "Player")
+# 
+# swing.miss <- SharedData$new(scrims[which(scrims$Batter == batter & scrims$PitchCall %in% c("StrikeSwinging", "FoulBall")),], key = ~PitchUID, "Player")
+
+dat <- SharedData$new(scrims, key = ~Batter, "Player")
+
+ip <- SharedData$new(scrims[which(scrims$PitchCall == "InPlay"),], key = ~Batter, "Player")
+
+takes <- SharedData$new(scrims[which(scrims$PitchCall %in% c("BallCalled", "StrikeCalled")),], key = ~Batter, "Player")
+
+swings <- SharedData$new(scrims[which(scrims$PitchCall %in% c("StrikeSwinging", "FoulBall")),], key = ~Batter, "Player")
+
+
+
+
+
+options(persistent = T)
+lefty <- mode(dat$origData()$BatterSide) == "Left"
+fixaxes = T
+
+## background spray buckets
+
+spray <- plot_ly(ip, x = ~XLand, y = ~YLand, color = ~Count_Type, symbol = ~Pitch_Type) %>% 
+  layout(images = list(
+      source = raster2uri(pic),
+      xref = "x", yref = "y", x = -249, y = 0, sizex = 249 * 2, sizey = 456.5,
+      sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+    ), dragmode = "lasso", xaxis = list(fixedrange = T, range = c(-249, 249), visible = F), yaxis = list(fixedrange = T, range = c(0, 456.5), visible = F), hoverlabel= "none") %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+
+ip.locs_Count <- plot_ly(ip, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Count_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+ip.locs_Pitch <- plot_ly(ip, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Pitch_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+
+takes_Count <- plot_ly(takes, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Count_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+takes_Pitch <- plot_ly(takes, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Pitch_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+
+
+swings_Count <- plot_ly(swings, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Count_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+swings_Pitch <- plot_ly(swings, x = ~PlateLocSide, y = ~PlateLocHeight, color = ~Pitch_Type, hovertext = "none") %>%
+  layout(xaxis = list(title = '', range = c(-4, 4), visible = F, fixedrange = fixaxes),
+             yaxis = list(title = '', range = c(-.5, 5), showgrid = F, visible = F, fixedrange = fixaxes), dragmode = "lasso",
+         images = list(
+               source = raster2uri(vector.ifelse(tests = as.logical(c(lefty, !lefty)), yeses = list(lhb.pic, rhb.pic), if.none = list())),
+               xref = "x", yref = "y", x = -4, y = -.5, sizex = 8, sizey = 5.5,
+               sizing = "stretch", xanchor = "left", yanchor = "bottom", layer = "below"
+             )) %>%
+  highlight(selected = "plotly_selected", on = "plotly_selected", selectize = T)
+
+
+```
+
+
+## Pitches Put In Play
+
+```{r}
+bscols(spray, ip.locs_Count, ip.locs_Pitch, widths = c(8))
+
+
+```
+
+## Pitches Taken 
+
+```{r}
+takes_Count
+takes_Pitch
+
+```
+
+
+## Swing & Misses
+
+```{r}
+swings_Count
+swings_Pitch
+
+```
+
+
+
